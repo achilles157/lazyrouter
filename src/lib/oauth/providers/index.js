@@ -46,7 +46,6 @@ const PROVIDERS = {
   clinepass,
   gitlab,
   "codebuddy-cn": codebuddyCn,
-  "codebuddy-intl": codebuddyIntl,
   // LazyRouter: provider registry uses id "codebuddy" (www.codebuddy.ai) —
   // same device-code flow as codebuddy-intl, kept as alias so OAuthModal's
   // deviceCodeProviders entry works.

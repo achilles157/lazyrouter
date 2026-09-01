@@ -99,7 +99,6 @@ import p96 from "./xiaomi-mimo.js";
 import p97 from "./xiaomi-tokenplan.js";
 import p98 from "./youcom.js";
 import p99 from "./alims-intl.js";
-import p100 from "./codebuddy-intl.js";
 import p101 from "./codebuddy.js";
 // Temporarily hidden — no tool calling support (trae SOLO agent / windsurf gRPC skip ToolCallChunk).
 // Re-enable by uncommenting both the import and the array entry below.
@@ -226,7 +225,6 @@ export default [
   p97,
   p98,
   p99,
-  p100,
   p101,
   // p102, // trae — hidden, no tool calling
   p103,

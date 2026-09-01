@@ -19,6 +19,7 @@ import { XiaomiTokenplanExecutor } from "./xiaomi-tokenplan.js";
 import { MimoFreeExecutor } from "./mimo-free.js";
 import { CodeBuddyExecutor } from "./codebuddy-cn.js";
 import { CodeBuddyIntlExecutor } from "./codebuddy-intl.js";
+import { CodeBuddyGlobalExecutor } from "./codebuddy.js";
 import TraeExecutor from "./trae.js";
 import ZedExecutor from "./zed.js";
 import WindsurfExecutor from "./windsurf.js";
@@ -52,6 +53,7 @@ const executors = {
   mmf: new MimoFreeExecutor(), // Alias for mimo-free
   "codebuddy-cn": new CodeBuddyExecutor(),
   "codebuddy-intl": new CodeBuddyIntlExecutor(),
+  "codebuddy": new CodeBuddyGlobalExecutor(),
   trae: new TraeExecutor(),
   zed: new ZedExecutor(),
   windsurf: new WindsurfExecutor(),
