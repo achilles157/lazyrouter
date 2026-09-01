@@ -58,6 +58,18 @@ export default {
     // { id: "gemini-2.5-pro", name: "Gemini-2.5-Pro", maxInputTokens: 400000, maxOutputTokens: 64000 },
     { id: "deepseek-v3-0324", name: "DeepSeek-V3", maxInputTokens: 128000, maxOutputTokens: 8192, strip: ["image", "audio"] },
     { id: "glm-5.0", name: "GLM-5.0", maxInputTokens: 200000, maxOutputTokens: 48000, strip: ["image", "audio"] },
+    // New catalog from upstream codebuddy-intl (v0.5.59) — GLM/Kimi/MiniMax lineup
+    { id: "glm-5.2", name: "GLM-5.2", maxInputTokens: 200000, maxOutputTokens: 48000, strip: ["image", "audio"] },
+    { id: "glm-5.1", name: "GLM-5.1", maxInputTokens: 200000, maxOutputTokens: 48000, strip: ["image", "audio"] },
+    { id: "glm-5.0-turbo", name: "GLM-5.0-Turbo", maxInputTokens: 200000, maxOutputTokens: 48000, strip: ["image", "audio"] },
+    { id: "kimi-k2.7", name: "Kimi-K2.7-Code", maxInputTokens: 200000, maxOutputTokens: 48000, strip: ["image", "audio"] },
+    { id: "kimi-k2.6", name: "Kimi-K2.6", maxInputTokens: 200000, maxOutputTokens: 48000, strip: ["image", "audio"] },
+    { id: "kimi-k2.5", name: "Kimi-K2.5", maxInputTokens: 200000, maxOutputTokens: 48000, strip: ["image", "audio"] },
+    { id: "minimax-m3", name: "MiniMax-M3", maxInputTokens: 200000, maxOutputTokens: 48000, strip: ["image", "audio"] },
+    { id: "minimax-m2.7", name: "MiniMax-M2.7", maxInputTokens: 200000, maxOutputTokens: 48000, strip: ["image", "audio"] },
+    { id: "deepseek-v4-pro", name: "DeepSeek-V4-Pro", maxInputTokens: 128000, maxOutputTokens: 8192, strip: ["image", "audio"] },
+    { id: "deepseek-v4-flash", name: "DeepSeek-V4-Flash", maxInputTokens: 128000, maxOutputTokens: 8192, strip: ["image", "audio"] },
+    { id: "hy3-preview", name: "Hy3 Preview", maxInputTokens: 200000, maxOutputTokens: 48000, strip: ["image", "audio"] },
   ],
   oauth: {
     baseUrl: "https://www.codebuddy.ai",
