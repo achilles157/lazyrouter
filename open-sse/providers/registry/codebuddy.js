@@ -39,8 +39,9 @@ export default {
   },
   models: [
     { id: "default-model", name: "Default", maxInputTokens: 176000, maxOutputTokens: 24000 },
-    // default-model-lite maps to codewise-default-cw-api-3 which requires Pro plan
-    // { id: "default-model-lite", name: "Default-Lite", maxInputTokens: 176000, maxOutputTokens: 24000 },
+    // NOTE: gemini-* and default-model-lite require Pro plan (error 11102 on free tier).
+// Kept visible for completeness - will error only when actually called with a free connection.
+    { id: "default-model-lite", name: "Default-Lite", maxInputTokens: 176000, maxOutputTokens: 24000 },
     { id: "claude-sonnet-4.6", name: "Claude Sonnet 4.6", maxInputTokens: 176000, maxOutputTokens: 24000 },
     { id: "claude-opus-4.7-1m", name: "Claude Opus 4.7 1M", maxInputTokens: 1000000, maxOutputTokens: 24000 },
     { id: "claude-opus-4.6", name: "Claude Opus 4.6", maxInputTokens: 176000, maxOutputTokens: 24000 },
@@ -50,12 +51,12 @@ export default {
     { id: "gpt-5.3-codex", name: "GPT-5.3-Codex", maxInputTokens: 272000, maxOutputTokens: 128000 },
     { id: "gpt-5.1-codex", name: "GPT-5.1-Codex", maxInputTokens: 272000, maxOutputTokens: 128000 },
     // gemini models require Pro plan (returns 11102 service info not found on free tier)
-    // { id: "gemini-3.1-pro", name: "Gemini-3.1-Pro", maxInputTokens: 400000, maxOutputTokens: 64000 },
-    // { id: "gemini-3.0-flash", name: "Gemini-3.0-Flash", maxInputTokens: 400000, maxOutputTokens: 64000 },
-    // { id: "gemini-3.5-flash", name: "Gemini-3.5-Flash", maxInputTokens: 1000000, maxOutputTokens: 65536 },
-    // { id: "gemini-2.5-flash", name: "Gemini-2.5-Flash", maxInputTokens: 400000, maxOutputTokens: 64000 },
-    // { id: "gemini-3.1-flash-lite", name: "Gemini-3.1-flash-lite", maxInputTokens: 200000, maxOutputTokens: 65536 },
-    // { id: "gemini-2.5-pro", name: "Gemini-2.5-Pro", maxInputTokens: 400000, maxOutputTokens: 64000 },
+    { id: "gemini-3.1-pro", name: "Gemini-3.1-Pro", maxInputTokens: 400000, maxOutputTokens: 64000 },
+    { id: "gemini-3.0-flash", name: "Gemini-3.0-Flash", maxInputTokens: 400000, maxOutputTokens: 64000 },
+    { id: "gemini-3.5-flash", name: "Gemini-3.5-Flash", maxInputTokens: 1000000, maxOutputTokens: 65536 },
+    { id: "gemini-2.5-flash", name: "Gemini-2.5-Flash", maxInputTokens: 400000, maxOutputTokens: 64000 },
+    { id: "gemini-3.1-flash-lite", name: "Gemini-3.1-flash-lite", maxInputTokens: 200000, maxOutputTokens: 65536 },
+    { id: "gemini-2.5-pro", name: "Gemini-2.5-Pro", maxInputTokens: 400000, maxOutputTokens: 64000 },
     { id: "deepseek-v3-0324", name: "DeepSeek-V3", maxInputTokens: 128000, maxOutputTokens: 8192, strip: ["image", "audio"] },
     { id: "glm-5.0", name: "GLM-5.0", maxInputTokens: 200000, maxOutputTokens: 48000, strip: ["image", "audio"] },
     // New catalog from upstream codebuddy-intl (v0.5.59) — GLM/Kimi/MiniMax lineup
