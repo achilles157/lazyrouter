@@ -331,7 +331,7 @@ export function stripThinkingSuffix(model) {
  * @returns {{ upstream: string, agentic: boolean, thinking: boolean }}
  */
 export function resolveKiroModel(model) {
-  let upstream = model;
+  let upstream = (model || "").replace(/^(kiro|kr)\//i, "");
   let agentic = false;
   let thinking = false;
   if (isAgenticModel(upstream)) {
@@ -342,7 +342,7 @@ export function resolveKiroModel(model) {
     thinking = true;
     upstream = stripThinkingSuffix(upstream);
   }
-  if (upstream === "auto") {
+  if (upstream === "auto" || !upstream) {
     upstream = "claude-sonnet-4.5";
   }
   return { upstream, agentic, thinking };
