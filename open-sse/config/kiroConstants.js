@@ -31,17 +31,16 @@ export const KIRO_ENDPOINT_FALLBACK_STATUSES = new Set([401, 403, 404]);
 // Used when an account cannot resolve its own profileArn. Builder ID and social
 // (Google/GitHub) sign-ins map to different shared profiles.
 export const KIRO_DEFAULT_PROFILE_ARNS = {
-  "builder-id": "arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX",
+  "builder-id": "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK",
   social: "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK",
 };
 
-// Back-compat single default (Builder ID).
-export const KIRO_DEFAULT_PROFILE_ARN = KIRO_DEFAULT_PROFILE_ARNS["builder-id"];
+// Back-compat single default.
+export const KIRO_DEFAULT_PROFILE_ARN = KIRO_DEFAULT_PROFILE_ARNS.social;
 
 /** Resolve the shared default profileArn for a given auth method. */
 export function resolveDefaultProfileArn(authMethod) {
-  const social = authMethod === "google" || authMethod === "github";
-  return social ? KIRO_DEFAULT_PROFILE_ARNS.social : KIRO_DEFAULT_PROFILE_ARNS["builder-id"];
+  return KIRO_DEFAULT_PROFILE_ARNS.social;
 }
 
 export const KIRO_THINKING_BUDGET_DEFAULT = 16000;
