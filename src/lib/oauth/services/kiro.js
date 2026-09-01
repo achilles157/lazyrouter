@@ -1,4 +1,5 @@
 import { KIRO_CONFIG, assertValidAwsRegion } from "../constants/oauth.js";
+import { generatePKCE } from "../utils/pkce.js";
 
 /**
  * Kiro OAuth Service
@@ -123,6 +124,19 @@ export class KiroService {
         tokenType: data.tokenType,
       },
     };
+  }
+
+  /**
+   * Create social authorization (LazyRouter compat wrapper for KiroBulkImportManager).
+   * Generates PKCE pair + social login URL in one call.
+   */
+  createSocialAuthorization(provider) {
+    if (!["google", "github"].includes(provider)) {
+      throw new Error(`Invalid social provider: ${provider}`);
+    }
+    const { codeVerifier, codeChallenge, state } = generatePKCE();
+    const authUrl = this.buildSocialLoginUrl(provider, codeChallenge, state);
+    return { authUrl, codeVerifier, codeChallenge, state, provider };
   }
 
   /**
