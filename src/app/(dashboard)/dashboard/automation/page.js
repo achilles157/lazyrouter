@@ -354,30 +354,90 @@ function CodeBuddyCnAutomationPanel({ onRefresh }) {
   );
 }
 
+function QoderPatImportModal({ isOpen, onClose, onSuccess }) {
+  const [tokens, setTokens] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const handleImport = async () => {
+    if (!tokens.trim()) return;
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/oauth/qoder/pat-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tokens }),
+      });
+      const data = await res.json();
+      setResult(data);
+      if (data.success) onSuccess?.();
+    } catch (error) {
+      setResult({ error: error.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Qoder PAT Import" size="lg">
+      <div className="flex flex-col gap-4">
+        <p className="text-xs text-text-muted">
+          Paste Qoder Personal Access Tokens (<code className="text-xs bg-border/50 px-1 rounded">pt-...</code>), one per line.
+          Generate them at <a href="https://qoder.com/profile" target="_blank" rel="noopener noreferrer" className="underline text-brand-500">qoder.com/profile</a> → Access Tokens.
+        </p>
+        <div className="rounded-[10px] border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
+          <p className="text-xs text-blue-700 dark:text-blue-300">
+            PATs are automatically exchanged to short-lived job tokens for inference. No OAuth flow needed.
+          </p>
+        </div>
+        <textarea
+          className="w-full rounded-[10px] border border-border bg-background p-3 font-mono text-xs text-text-main placeholder:text-text-muted focus:border-brand-500/40 focus:ring-2 focus:ring-brand-500/30 focus:outline-none disabled:opacity-50"
+          rows={6}
+          placeholder={"pt-abc123def456...\npt-xyz789ghi012..."}  
+          value={tokens}
+          onChange={(e) => setTokens(e.target.value)}
+          disabled={loading}
+        />
+        {result && (
+          <div className={`rounded-[10px] p-3 text-xs ${
+            result.success ? "bg-green-500/10 text-green-600 dark:text-green-400" : "bg-red-500/10 text-red-600 dark:text-red-400"
+          }`}>
+            {result.success
+              ? `Imported ${result.imported}/${result.total} PAT(s).${result.failed ? ` ${result.failed} failed.` : ""}`
+              : result.error || "Import failed"}
+          </div>
+        )}
+        <div className="flex gap-2 pt-2">
+          <Button variant="outline" onClick={onClose} fullWidth disabled={loading}>Close</Button>
+          <Button variant="primary" onClick={handleImport} disabled={loading || !tokens.trim()} loading={loading} fullWidth>
+            Import PATs
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function QoderAutomationPanel({ providerInfo, onRefresh }) {
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [isOAuthOpen, setIsOAuthOpen] = useState(false);
+  const [isPatOpen, setIsPatOpen] = useState(false);
 
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <button type="button" onClick={() => setIsBulkOpen(true)} className="text-left">
-          <Card
-            hover
-            padding="md"
-            icon="group_add"
-            title="Auto Login Bulk"
-            subtitle="Run bulk gmail:password or gmail|password automation via Google SSO with Qoder device flow."
-          />
+          <Card hover padding="md" icon="group_add" title="Auto Login Bulk"
+            subtitle="Run bulk gmail:password or gmail|password automation via Google SSO with Qoder device flow." />
         </button>
         <button type="button" onClick={() => setIsOAuthOpen(true)} className="text-left">
-          <Card
-            hover
-            padding="md"
-            icon="login"
-            title="Device OAuth Login"
-            subtitle="Open Qoder device login in browser and poll until the token is saved."
-          />
+          <Card hover padding="md" icon="login" title="Device OAuth Login"
+            subtitle="Open Qoder device login in browser and poll until the token is saved." />
+        </button>
+        <button type="button" onClick={() => setIsPatOpen(true)} className="text-left">
+          <Card hover padding="md" icon="key" title="PAT Import"
+            subtitle="Paste Personal Access Tokens (pt-...) from qoder.com/profile. No OAuth flow needed." />
         </button>
       </div>
       <BulkAccountAutomationModal
@@ -398,11 +458,14 @@ function QoderAutomationPanel({ providerInfo, onRefresh }) {
         }}
         onClose={() => setIsOAuthOpen(false)}
       />
+      <QoderPatImportModal
+        isOpen={isPatOpen}
+        onClose={() => setIsPatOpen(false)}
+        onSuccess={onRefresh}
+      />
     </>
   );
-}
-
-function AutoclawAutomationPanel({ onRefresh }) {
+}({ onRefresh }) {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [autoclawConnections, setAutoclawConnections] = useState([]);
