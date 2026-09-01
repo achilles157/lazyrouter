@@ -465,7 +465,9 @@ function QoderAutomationPanel({ providerInfo, onRefresh }) {
       />
     </>
   );
-}({ onRefresh }) {
+}
+
+function AutoclawAutomationPanel({ onRefresh }) {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [autoclawConnections, setAutoclawConnections] = useState([]);
