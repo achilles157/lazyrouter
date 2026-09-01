@@ -326,7 +326,7 @@ export function claudeToKiroRequest(model, body, stream, credentials) {
     agentMode: "vibe",
   };
 
-  if (profileArn) payload.profileArn = profileArn;
+  if (profileArn && !profileArn.includes("AAAACCCCXXXX")) payload.profileArn = profileArn;
   if (systemPrompt) payload.systemPrompt = systemPrompt;
   if (additionalModelRequestFields) {
     payload.additionalModelRequestFields = additionalModelRequestFields;

@@ -71,7 +71,14 @@ export async function getProviderConnections(filter = {}) {
   const db = await getAdapter();
   const where = [];
   const params = [];
-  if (filter.provider) { where.push("provider = ?"); params.push(filter.provider); }
+  if (filter.provider) {
+    if (filter.provider === "codebuddy" || filter.provider === "codebuddy-intl") {
+      where.push("provider IN ('codebuddy', 'codebuddy-intl')");
+    } else {
+      where.push("provider = ?");
+      params.push(filter.provider);
+    }
+  }
   if (filter.isActive !== undefined) { where.push("isActive = ?"); params.push(filter.isActive ? 1 : 0); }
   const sql = `SELECT * FROM providerConnections${where.length ? ` WHERE ${where.join(" AND ")}` : ""}`;
   const rows = db.all(sql, params);

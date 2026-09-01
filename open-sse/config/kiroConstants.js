@@ -342,6 +342,9 @@ export function resolveKiroModel(model) {
     thinking = true;
     upstream = stripThinkingSuffix(upstream);
   }
+  if (upstream === "auto") {
+    upstream = "claude-sonnet-4.5";
+  }
   return { upstream, agentic, thinking };
 }
 

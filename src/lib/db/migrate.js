@@ -106,6 +106,11 @@ function syncSchemaFromTables(adapter) {
       try { adapter.exec(idx); } catch {}
     }
   }
+
+  // Normalize legacy provider name aliases
+  try {
+    adapter.exec("UPDATE providerConnections SET provider = 'codebuddy' WHERE provider = 'codebuddy-intl'");
+  } catch {}
 }
 
 // ─── Legacy JSON import (one-time) ───────────────────────────────────────

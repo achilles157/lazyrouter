@@ -417,7 +417,7 @@ export function openaiToKiroRequest(model, body, stream, credentials) {
     agentMode: "vibe",
   };
 
-  if (profileArn) {
+  if (profileArn && !profileArn.includes("AAAACCCCXXXX")) {
     payload.profileArn = profileArn;
   }
   if (systemPrompt) payload.systemPrompt = systemPrompt;
