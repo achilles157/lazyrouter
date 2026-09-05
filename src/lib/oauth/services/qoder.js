@@ -76,6 +76,7 @@ export class QoderService {
       challenge_method: "S256",
       machine_id: machineId,
       nonce,
+      client_id: "e883ade2-e6e3-4d6d-adf7-f92ceff5fdcb",
     });
 
     return {

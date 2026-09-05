@@ -342,7 +342,16 @@ export class KiroExecutor extends BaseExecutor {
    * classify the status, and trigger account fallback/cooldown.
    */
   async execute(args) {
+    // AWS CodeWhisperer strictly validates the schema. The `chatCore` injects
+    // `model` generically into the payload which causes REQUEST_BODY_INVALID.
+    // Also, Kiro APIs reject top-level `systemPrompt` (must be prepended to conversation).
+    if (args.body) {
+      if ("model" in args.body) delete args.body.model;
+      if ("systemPrompt" in args.body) delete args.body.systemPrompt;
+    }
+
     const result = await super.execute(args);
+
     if (result?.response?.ok) this.attachIntegrityGate(result, args);
     return result;
   }

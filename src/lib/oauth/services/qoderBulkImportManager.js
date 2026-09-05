@@ -10,6 +10,7 @@ import {
 } from "./kiroBulkImportManager.js";
 import { runGoogleAccountAutomation } from "./googleAutomation.js";
 import { QoderService } from "./qoder.js";
+import { resolveQoderModels } from "../../../../open-sse/services/qoderModels.js";
 
 const QODER_PROVIDER_ID = "qoder";
 const QODER_LABEL = "Qoder";
@@ -127,6 +128,8 @@ class QoderBulkImportManager extends KiroBulkImportManager {
           userInfoUserId = userInfo.userId || "";
         } catch {}
 
+
+
         this.setAccountStep(account, "checking_plan", "Reading plan tier via browser session");
         await this.persistJobSnapshot(job, { forcePreview: true });
         try {
@@ -152,11 +155,12 @@ class QoderBulkImportManager extends KiroBulkImportManager {
         this.setAccountStep(account, "saving_connection", "Saving Qoder connection to database");
         await this.persistJobSnapshot(job, { forcePreview: true });
 
+        const resolvedUserId = tokenData.userId || userInfoUserId || "";
         const { connection } = await this.saveConnection({
           tokens: {
             accessToken: tokenData.accessToken,
             refreshToken: tokenData.refreshToken || "",
-            userId: tokenData.userId || userInfoUserId || "",
+            userId: resolvedUserId,
             machineId,
             organizationId: organizationId || tokenData.organizationId || "",
             expireTime: tokenData.expireTime || null,
@@ -166,11 +170,53 @@ class QoderBulkImportManager extends KiroBulkImportManager {
           email: account.email,
         });
 
+        // Verify the account is truly active by performing a real COSY-signed
+        // model list request to api3.qoder.sh. This catches the "no plan" case
+        // (403 code 112) early — the browser session may show a plan but the
+        // inference API still rejects requests if the free tier was not activated.
+        let verifyLabel = "";
+        this.setAccountStep(account, "verifying_api_access", "Verifying Qoder API access (COSY model list)");
+        await this.persistJobSnapshot(job, { forcePreview: true });
+        try {
+          const verifyResult = await Promise.race([
+            resolveQoderModels(
+              {
+                accessToken: tokenData.accessToken,
+                refreshToken: tokenData.refreshToken || "",
+                email: account.email,
+                displayName,
+                providerSpecificData: {
+                  authMethod: "device",
+                  userId: resolvedUserId,
+                  machineId,
+                  organizationId: organizationId || tokenData.organizationId || "",
+                },
+              },
+              { forceRefresh: true },
+            ),
+            new Promise((resolve) => setTimeout(() => resolve(null), 12_000)),
+          ]);
+
+          if (verifyResult?.models?.length) {
+            const modelNames = verifyResult.models.map((m) => m.id || m.name).slice(0, 5).join(", ");
+            const more = verifyResult.models.length > 5 ? ` +${verifyResult.models.length - 5} more` : "";
+            verifyLabel = ` ✓ Models: [${modelNames}${more}]`;
+          } else if (verifyResult === null) {
+            // null = COSY guard rejected (missing userId) or network timeout
+            verifyLabel = " ⚠ API verification timed out (check userId)";
+          } else {
+            // resolveQoderModels returned entry with 0 models
+            verifyLabel = " ⚠ API reachable but no models returned (plan not yet active?)";
+          }
+        } catch (verifyErr) {
+          verifyLabel = ` ⚠ API check failed: ${verifyErr.message?.slice(0, 80) || "unknown error"}`;
+        }
+
         const planLabel = planTier ? ` (${planTier})` : "";
         this.finalizeAccount(account, "success", {
           connectionId: connection.id,
           step: "connection_saved",
-          message: `Qoder connection saved successfully${planLabel}`,
+          message: `Qoder connection saved successfully${planLabel}${verifyLabel}`,
         });
         account.runtimeSession = null;
         await context.close().catch(() => null);
