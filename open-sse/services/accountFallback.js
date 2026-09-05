@@ -1,4 +1,12 @@
 import { ERROR_RULES, BACKOFF_CONFIG, TRANSIENT_COOLDOWN_MS } from "../config/errorConfig.js";
+import {
+  getCircuitBreaker,
+  getAllCircuitBreakerStatuses,
+  resetCircuitBreaker,
+  PROVIDER_FAILURE_ERROR_CODES,
+} from "../utils/circuitBreaker.js";
+import { classify429 } from "../utils/classify429.js";
+import { getProviderResilienceProfile } from "../config/providerProfiles.js";
 
 /**
  * Calculate exponential backoff cooldown for rate limits (429)
@@ -212,4 +220,169 @@ export function applyErrorState(account, status, errorText) {
     lastError: { status, message: errorText, timestamp: new Date().toISOString() },
     status: "error"
   };
+}
+
+// ── Provider-level circuit breaker ──────────────────────────────────
+
+/**
+ * Check if a provider is currently blocked by the circuit breaker.
+ * Proxy-aware: each proxy bucket has its own breaker so one dead proxy
+ * doesn't block accounts on a different proxy.
+ */
+export function isProviderInCooldown(provider, proxyHash = "direct") {
+  if (!provider) return false;
+  const breaker = getCircuitBreaker(`${provider}:${proxyHash}`);
+  return breaker ? !breaker.canExecute() : false;
+}
+
+/**
+ * Get remaining retry-after time for a provider breaker (ms).
+ * Proxy-aware.
+ */
+export function getProviderCooldownRemainingMs(provider, proxyHash = "direct") {
+  if (!provider) return null;
+  const breaker = getCircuitBreaker(`${provider}:${proxyHash}`);
+  if (!breaker || breaker.canExecute()) return null;
+  const remaining = breaker.getRetryAfterMs();
+  return remaining > 0 ? remaining : null;
+}
+
+/**
+ * Get the circuit breaker state for a provider.
+ * Proxy-aware.
+ */
+export function getProviderBreakerState(provider, proxyHash = "direct") {
+  if (!provider) return null;
+  const breaker = getCircuitBreaker(`${provider}:${proxyHash}`);
+  return breaker?.getStatus?.() ?? null;
+}
+
+/**
+ * Record a provider failure against the shared circuit breaker.
+ * Deduplicates rapid-fire failures from the same connection within 5s.
+ * Proxy-aware: failures are attributed to the specific proxy bucket.
+ */
+const _lastProviderFailure = new Map();
+const _dedupMs = 5_000;
+const _dedupMaxSize = 10_000; // cap to prevent unbounded growth
+
+/**
+ * Clear the provider-failure dedup map. Used by tests and full resets.
+ */
+export function clearProviderFailureDedup() {
+  _lastProviderFailure.clear();
+}
+
+export function recordProviderFailure(provider, statusCode, errorText, log, connectionId, proxyHash = "direct") {
+  if (!provider) return;
+
+  // Deduplicate
+  if (connectionId) {
+    const dedupKey = `${provider}:${proxyHash}:${connectionId}`;
+    const now = Date.now();
+    const last = _lastProviderFailure.get(dedupKey);
+    if (last && now - last < _dedupMs) return;
+    _lastProviderFailure.set(dedupKey, now);
+    // Evict oldest entries when over the cap to prevent unbounded memory growth
+    if (_lastProviderFailure.size > _dedupMaxSize) {
+      const evictCount = Math.floor(_dedupMaxSize / 10);
+      const keysToEvict = Array.from(_lastProviderFailure.keys()).slice(0, evictCount);
+      for (const key of keysToEvict) _lastProviderFailure.delete(key);
+    }
+  }
+
+  // Only count failure-eligible status codes
+  if (statusCode && !PROVIDER_FAILURE_ERROR_CODES.has(statusCode)) return;
+
+  const profile = getProviderResilienceProfile(provider);
+  const breakerKey = `${provider}:${proxyHash}`;
+  const breaker = getCircuitBreaker(breakerKey, {
+    failureThreshold: profile.providerFailureThreshold,
+    failureWindowMs: profile.providerFailureWindowMs,
+    resetTimeout: profile.providerCooldownMs,
+  });
+  if (!breaker) return;
+  if (!breaker.canExecute()) return; // already OPEN, skip
+
+  breaker._onFailure({ statusCode, message: errorText });
+
+  if (!breaker.canExecute()) {
+    log?.warn?.("AUTH", `[ProviderFailure] ${breakerKey}: circuit breaker opened after ${breaker.failureCount} failures`);
+  }
+}
+
+/**
+ * Reset the shared provider breaker for a proxy bucket.
+ * Proxy-aware.
+ */
+export function clearProviderFailure(provider, proxyHash = "direct") {
+  if (!provider) return;
+  resetCircuitBreaker(`${provider}:${proxyHash}`);
+}
+
+/**
+ * Check if a status code should count toward provider failure threshold.
+ */
+export function isProviderFailureCode(status) {
+  return PROVIDER_FAILURE_ERROR_CODES.has(status);
+}
+
+/**
+ * Get all providers currently blocked by the circuit breaker.
+ */
+export function getProvidersInCooldown() {
+  return getAllCircuitBreakerStatuses()
+    .filter((s) => {
+      const breaker = getCircuitBreaker(s.name);
+      return Boolean(breaker && !breaker.canExecute());
+    })
+    .map((s) => ({
+      provider: s.name,
+      failureCount: s.failureCount,
+      cooldownRemainingMs: s.retryAfterMs || null,
+      lastFailureAt: s.lastFailureTime,
+    }));
+}
+
+/**
+ * Pipeline gate: returns true if the circuit breaker is OPEN for ALL known proxy
+ * buckets of a provider. When true, the request should short-circuit BEFORE any
+ * credential lookup — no point querying the DB when every bucket is blocked.
+ * If even one proxy bucket can execute, returns false so the credential loop can
+ * try accounts on that bucket.
+ */
+export function isProviderFullyBlocked(provider) {
+  if (!provider) return false;
+  const all = getAllCircuitBreakerStatuses();
+  // Collect breaker names matching this provider: `${provider}:${proxyHash}`
+  const providerBreakers = all.filter((s) => {
+    const name = s.name || "";
+    return name === provider || name.startsWith(`${provider}:`);
+  });
+  if (providerBreakers.length === 0) return false; // no breakers registered → not blocked
+  // Blocked only if EVERY registered bucket is OPEN (canExecute=false)
+  return providerBreakers.every((s) => {
+    const breaker = getCircuitBreaker(s.name);
+    return Boolean(breaker && !breaker.canExecute());
+  });
+}
+
+/**
+ * Get the shortest remaining cooldown across all proxy buckets for a provider.
+ * Used to populate Retry-After when the pipeline gate blocks.
+ */
+export function getProviderShortestCooldownMs(provider) {
+  if (!provider) return 0;
+  const all = getAllCircuitBreakerStatuses();
+  let shortest = Infinity;
+  for (const s of all) {
+    const name = s.name || "";
+    if (name !== provider && !name.startsWith(`${provider}:`)) continue;
+    const breaker = getCircuitBreaker(s.name);
+    if (breaker && !breaker.canExecute()) {
+      const remaining = breaker.getRetryAfterMs();
+      if (remaining > 0 && remaining < shortest) shortest = remaining;
+    }
+  }
+  return shortest === Infinity ? 0 : shortest;
 }

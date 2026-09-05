@@ -7,6 +7,15 @@ import {
   extractApiKey,
   isValidApiKey,
 } from "../services/auth.js";
+import {
+  isProviderInCooldown,
+  isProviderFullyBlocked,
+  getProviderShortestCooldownMs,
+  recordProviderFailure,
+  clearProviderFailure,
+} from "open-sse/services/accountFallback.js";
+import { getProxyHash } from "@/lib/network/connectionProxy.js";
+import { maybeWaitForCooldown, MAX_COOLDOWN_RETRIES } from "open-sse/utils/cooldownRetry.js";
 import { handleAntigravityQuotaError } from "../services/antigravityQuota.js";
 import { getSettings } from "@/lib/localDb";
 import { getModelInfo, getComboModels } from "../services/model.js";
@@ -29,6 +38,12 @@ import { getProjectIdForConnection } from "open-sse/services/projectId.js";
  * Supports: OpenAI, Claude, Gemini, OpenAI Responses API formats
  * Format detection and translation handled by translator
  */
+
+function checkCircuitBreaker(provider, proxyHash = null, enabled = true) {
+  if (!enabled) return false;
+  return proxyHash ? isProviderInCooldown(provider, proxyHash) : isProviderFullyBlocked(provider);
+}
+
 export async function handleChat(request, clientRawRequest = null) {
   let body;
   try {
@@ -224,6 +239,25 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   const excludeConnectionIds = new Set();
   let lastError = null;
   let lastStatus = null;
+  let cooldownRetries = 0;
+
+  const chatSettingsGate = await getSettings();
+  const circuitBreakerEnabled = chatSettingsGate.circuitBreakerEnabled !== false && chatSettingsGate.circuitBreakerEnabled !== 0;
+
+  // Pipeline gate: check circuit breaker state BEFORE credential lookup.
+  // If ALL proxy buckets for this provider are OPEN, short-circuit immediately.
+  if (checkCircuitBreaker(provider, null, circuitBreakerEnabled)) {
+    const cooldownMs = getProviderShortestCooldownMs(provider);
+    const retryAfterSec = Math.ceil(cooldownMs / 1000) || 30;
+    const retryAfterTimestamp = new Date(Date.now() + cooldownMs).toISOString();
+    log.warn("GATE", `${provider} circuit breaker OPEN on all proxy buckets — short-circuiting before credential lookup`);
+    return unavailableResponse(
+      HTTP_STATUS.SERVICE_UNAVAILABLE,
+      `[${provider}/${model}] Provider temporarily unavailable (circuit breaker open)`,
+      retryAfterTimestamp,
+      `${retryAfterSec}s`
+    );
+  }
 
   while (true) {
     const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
@@ -231,6 +265,25 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     // All accounts unavailable
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
+        // Cooldown-aware retry: if the earliest account comes off cooldown soon,
+        // wait for it (aborted on client disconnect) then retry once.
+        if (credentials.retryAfter && cooldownRetries < MAX_COOLDOWN_RETRIES) {
+          const waitDecision = await maybeWaitForCooldown({
+            retryAfter: credentials.retryAfter,
+            retriesSoFar: cooldownRetries,
+            signal: request?.signal,
+          });
+          if (waitDecision.shouldRetry) {
+            cooldownRetries++;
+            log.info("CHAT", `[${provider}/${model}] all accounts rate-limited — waited ${waitDecision.waitedMs}ms, retrying (attempt ${cooldownRetries})`);
+            continue;
+          }
+          if (waitDecision.reason === "client_disconnected") {
+            log.info("CHAT", `[${provider}/${model}] client disconnected during cooldown wait — aborting`);
+            return new Response(null, { status: 499 });
+          }
+          log.info("CHAT", `[${provider}/${model}] cooldown retry skipped: ${waitDecision.reason}`);
+        }
         const errorMsg = lastError || credentials.lastError || "Unavailable";
         const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
         log.warn("CHAT", `[${provider}/${model}] ${errorMsg} (${credentials.retryAfterHuman})`);
@@ -242,6 +295,15 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       }
       log.warn("CHAT", "No more accounts available", { provider });
       return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable");
+    }
+
+    // Proxy-aware circuit breaker: skip THIS account if its proxy bucket is OPEN.
+    // Accounts on other proxies are still tried.
+    const proxyHash = getProxyHash(credentials.providerSpecificData);
+    if (checkCircuitBreaker(provider, proxyHash, circuitBreakerEnabled)) {
+      log.warn("AUTH", `${provider} proxy bucket ${proxyHash} circuit breaker OPEN — skipping account ${credentials.connectionName}`);
+      excludeConnectionIds.add(credentials.connectionId);
+      continue;
     }
 
     // Account selection shown in the unified "▶" line (acc:...)
@@ -279,6 +341,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       cavemanLevel: chatSettings.cavemanLevel || "full",
       ponytailEnabled: !!chatSettings.ponytailEnabled,
       ponytailLevel: chatSettings.ponytailLevel || "full",
+      loopGuardEnabled: chatSettings.loopGuardEnabled !== false && chatSettings.loopGuardEnabled !== 0,
       pxpipeEnabled: !!chatSettings.pxpipeEnabled,
       pxpipeMinChars: chatSettings.pxpipeMinChars,
       pxpipeTimeoutMs: chatSettings.pxpipeTimeoutMs,
@@ -297,6 +360,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       },
       onRequestSuccess: async () => {
         await clearAccountError(credentials.connectionId, credentials, model);
+        clearProviderFailure(provider, proxyHash);
       }
     });
 
@@ -318,6 +382,11 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     const shouldFallback = provider === "antigravity" && quotaResetMs
       ? true
       : (await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model, resetsAtMs)).shouldFallback;
+
+    // Record provider-level failure for circuit breaker. Only provider-level
+    // errors (5xx/timeout per PROVIDER_FAILURE_ERROR_CODES) count — 429 stays
+    // account-scoped and 401 is credential-scoped. Proxy-aware attribution.
+    recordProviderFailure(provider, result.status, result.error, log, credentials.connectionId, proxyHash);
 
     if (shouldFallback) {
       log.warn("FALLBACK", `⇄ ACC:${credentials.connectionName} UNAVAILABLE (${result.status}) → NEXT ACCOUNT`);

@@ -20,6 +20,8 @@ import { handleNonStreamingResponse } from "./chatCore/nonStreamingHandler.js";
 import { handleStreamingResponse, buildOnStreamComplete } from "./chatCore/streamingHandler.js";
 import { detectClientTool, isNativePassthrough } from "../utils/clientDetector.js";
 import { dedupeTools } from "../utils/toolDeduper.js";
+import { detectLoop } from "../utils/loopGuard.js";
+import { injectTerminationPrompt } from "../rtk/terminationPrompt.js";
 import { injectCaveman } from "../rtk/caveman.js";
 import { injectPonytail } from "../rtk/ponytail.js";
 import { compressMessages, formatRtkLog } from "../rtk/index.js";
@@ -58,7 +60,47 @@ export function stripContinuityFields(body) {
   return body;
 }
 
-export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking }) {
+/**
+ * Loop guard: detect repeated tool_call / text patterns in the translated
+ * conversation and inject a corrective hint into the last user/tool message so
+ * the model breaks out of the loop. Stateless — reads translatedBody.messages
+ * only. Idempotent: a hint already present is not re-appended.
+ */
+function applyLoopGuard(translatedBody, provider, model, log) {
+  const loopCheck = detectLoop(translatedBody);
+  if (!loopCheck.detected) return false;
+  const msgs = translatedBody?.messages;
+  if (Array.isArray(msgs)) {
+    let target = null;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if (m && (m.role === "user" || m.role === "tool")) {
+        target = m;
+        break;
+      }
+      // Text-only loop: last message is assistant (no user/tool after it).
+      if (m && m.role === "assistant" && i === msgs.length - 1) {
+        target = m;
+        break;
+      }
+    }
+    if (target) {
+      const hint = `\n\n[ROUTER NOTE: ${loopCheck.hint}]`;
+      if (typeof target.content === "string") {
+        if (!target.content.includes("[ROUTER NOTE:")) target.content += hint;
+      } else if (Array.isArray(target.content)) {
+        if (!target.content.some((p) => p.text && p.text.includes("[ROUTER NOTE:")))
+          target.content.push({ type: "text", text: hint });
+      } else {
+        target.content = hint.trimStart();
+      }
+    }
+  }
+  log?.warn?.("LOOPGUARD", `${provider}/${model} | loop detected, hint injected`);
+  return true;
+}
+
+export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking, loopGuardEnabled = true }) {
   const { provider, model } = modelInfo;
   const requestStartTime = Date.now();
   // Stable per-session color so all lines of one CLI conversation share a tag
@@ -280,6 +322,11 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   if (tokenSaverEnabled && ponytailEnabled && ponytailLevel) {
     injectPonytail(translatedBody, finalFormat, ponytailLevel);
     xf.push(`PONYTAIL:${ponytailLevel}`);
+  }
+
+  // Loop guard: detect repeating tool-call / text loops and inject a corrective hint
+  if (loopGuardEnabled && applyLoopGuard(translatedBody, provider, model, log)) {
+    xf.push("LOOPGUARD");
   }
 
   // PXPIPE: image bulky context (Claude-format bodies only), last saver before dispatch
