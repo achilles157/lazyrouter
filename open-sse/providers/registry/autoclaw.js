@@ -13,39 +13,24 @@ export default {
   authModes: ["access_token"],
   hasOAuth: false,
   transport: {
-    baseUrl: "https://autoglm-api.autoglm.ai/autoclaw-proxy/proxy/autoclaw/chat/completions",
+    // Desktop-client inference proxy (autoclawpi 1.17.9 methods).
+    // The executor overrides buildUrl to {base}/autoclaw-proxy/proxy/autoclaw/v1/chat/completions.
+    baseUrl: "https://autoglm-api.autoglm.ai/autoclaw-proxy/proxy/autoclaw/v1/chat/completions",
     format: "openai",
     forceStream: true,
-    headers: {
-      "content-type": "application/json",
-      "origin": "https://autoclaw.z.ai",
-      "referer": "https://autoclaw.z.ai/",
-      "user-agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-      "x-product": "autoclaw",
-      "x-version": "1.10.0",
-      "x-tm": "web",
-      "x-channel": "official",
-      "x-client-type": "web",
-      "x-lang": "zh-CN",
-    },
+    // Inference headers are unsigned; the executor builds them via autoclawInferenceHeaders
+    // (X-Authorization + X-Harness-Type: zcode + X-Version 1.17.9 + X-Request-Model route id).
+    headers: {},
     auth: { header: "X-Authorization", scheme: "bearer", combined: true },
   },
   models: [
-    {
-      // openrouter_glm-5.2 is NOT available on free-tier accounts (returns 非法模型).
-      // Only zai_glm-5-turbo is confirmed working as of 2026-08-22.
-      // id: "glm-5.2",
-      // name: "GLM-5.2",
-      // alias: "glm52",
-      // upstreamModelId: "openrouter_glm-5.2",
-    },
-    {
-      id: "glm-5-turbo",
-      name: "GLM-5 Turbo",
-      alias: "glm5t",
-      upstreamModelId: "zai_glm-5-turbo",
-    },
+    { id: "auto", name: "Auto", alias: "acauto" },
+    { id: "auto-fast", name: "Auto Fast" },
+    { id: "glm-5-turbo", name: "GLM-5 Turbo", alias: "glm5t" },
+    { id: "glm-5.3", name: "GLM-5.3" },
+    { id: "glm-5.3-flash", name: "GLM-5.3 Flash" },
+    { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro" },
+    { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash" },
   ],
   features: { usage: true },
 };

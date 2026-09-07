@@ -1,33 +1,14 @@
-import crypto from "node:crypto";
+import {
+  AUTOCLAW_BASE_URL,
+  autoclawUserapiHeaders,
+} from "../../utils/autoclawSign.js";
 
-const BASE_URL = "https://autoglm-api.autoglm.ai";
-const APP_ID = "100003";
-const APP_KEY = "38d2391985e2369a5fb8227d8e6cd5e5";
-
-function signHeaders(extra = {}) {
-  const ts = String(Math.floor(Date.now() / 1000));
-  const sign = crypto.createHash("md5").update(`${APP_ID}&${ts}&${APP_KEY}`).digest("hex");
-  return {
-    accept: "*/*",
-    "content-type": "application/json",
-    origin: "https://autoclaw.z.ai",
-    referer: "https://autoclaw.z.ai/",
-    "user-agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-    "x-auth-appid": APP_ID,
-    "x-auth-timestamp": ts,
-    "x-auth-sign": sign,
-    "x-product": "autoclaw",
-    "x-version": "1.10.0",
-    "x-tm": "web",
-    "x-channel": "official",
-    "x-client-type": "web",
-    "x-trace-id": crypto.randomUUID(),
-    "x-lang": "zh-CN",
-    ...extra,
-  };
-}
-
+/**
+ * AutoClaw token refresh — ported from hirotomasato/autoclawpi.
+ * Endpoint: POST /userapi/v1/agent-refresh (the old /userapi/v1/refresh is the
+ * deprecated web-client route). Signed userapi headers, desktop identity
+ * (X-Tm linux / X-Client-Type pc / X-Version 1.17.9).
+ */
 export async function refreshAutoclawToken(credentials, _log, _proxyOptions, onRotated) {
   if (!credentials?.refreshToken) {
     throw new Error("autoclaw refresh: missing refreshToken");
@@ -39,11 +20,11 @@ export async function refreshAutoclawToken(credentials, _log, _proxyOptions, onR
 
   const refreshToken = credentials.refreshToken.replace(/^Bearer\s+/i, "");
 
-  const res = await fetch(`${BASE_URL}/userapi/v1/refresh`, {
+  const res = await fetch(`${AUTOCLAW_BASE_URL}/userapi/v1/agent-refresh`, {
     method: "POST",
-    headers: signHeaders(),
+    headers: autoclawUserapiHeaders(),
     body: JSON.stringify({
-      source_id: "web",
+      source_id: "autoclaw",
       device_id: deviceId,
       refresh_token: refreshToken,
     }),
@@ -79,5 +60,3 @@ export async function refreshAutoclawToken(credentials, _log, _proxyOptions, onR
   }
   return newTokens;
 }
-
-export { signHeaders as _autoclawSignHeaders };

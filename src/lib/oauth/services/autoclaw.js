@@ -6,34 +6,7 @@ import {
 } from "@/lib/db";
 import { getAutoclawBalance } from "open-sse/services/usage/autoclaw.js";
 import { refreshAutoclawToken } from "open-sse/services/tokenRefresh/autoclaw.js";
-
-const BASE_URL = "https://autoglm-api.autoglm.ai";
-const APP_ID = "100003";
-const APP_KEY = "38d2391985e2369a5fb8227d8e6cd5e5";
-
-function signHeaders(extra = {}) {
-  const ts = String(Math.floor(Date.now() / 1000));
-  const sign = crypto.createHash("md5").update(`${APP_ID}&${ts}&${APP_KEY}`).digest("hex");
-  return {
-    accept: "*/*",
-    "content-type": "application/json",
-    origin: "https://autoclaw.z.ai",
-    referer: "https://autoclaw.z.ai/",
-    "user-agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-    "x-auth-appid": APP_ID,
-    "x-auth-timestamp": ts,
-    "x-auth-sign": sign,
-    "x-product": "autoclaw",
-    "x-version": "1.10.0",
-    "x-tm": "web",
-    "x-channel": "official",
-    "x-client-type": "web",
-    "x-trace-id": crypto.randomUUID(),
-    "x-lang": "zh-CN",
-    ...extra,
-  };
-}
+import { AUTOCLAW_BASE_URL, autoclawUserapiHeaders } from "open-sse/utils/autoclawSign.js";
 
 export class AutoclawService {
   async getUserProfile(accessToken, _proxyOptions = null) {
@@ -41,9 +14,9 @@ export class AutoclawService {
       throw Object.assign(new Error("autoclaw: accessToken required"), { code: "INVALID_TOKEN" });
     }
     const token = accessToken.replace(/^Bearer\s+/i, "");
-    const res = await fetch(`${BASE_URL}/userapi/v1/user-profile`, {
+    const res = await fetch(`${AUTOCLAW_BASE_URL}/userapi/v1/user-profile`, {
       method: "POST",
-      headers: signHeaders({ "X-Authorization": `Bearer ${token}` }),
+      headers: autoclawUserapiHeaders({ "x-authorization": `Bearer ${token}` }),
       body: "{}",
     });
     if (!res.ok) {

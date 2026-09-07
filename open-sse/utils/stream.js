@@ -3,6 +3,7 @@ import { FORMATS } from "../translator/formats.js";
 import { trackPendingRequest, appendRequestLog } from "@/lib/usageDb.js";
 import { extractUsage, mergeUsage, hasValidUsage, estimateUsage, logUsage, addBufferToUsage, filterUsageForFormat, COLORS } from "./usageTracking.js";
 import { parseSSELine, hasValuableContent, fixInvalidId, formatSSE } from "./streamHelpers.js";
+import { stripAutoclawWafPrefixes } from "./autoclawWaf.js";
 import { getOpenAIResponsesEventName, isOpenAIResponsesTerminalEvent, formatIncompleteOpenAIResponsesStreamFailure } from "./responsesStreamHelpers.js";
 import { dbg, isDebugEnabled } from "./debugLog.js";
 
@@ -108,7 +109,13 @@ export function createSSEStream(options = {}) {
   return new TransformStream({
     transform(chunk, controller) {
       if (!ttftAt) ttftAt = Date.now();
-      const text = decoder.decode(chunk, { stream: true });
+      let text = decoder.decode(chunk, { stream: true });
+      // AutoClaw WAF gate: the proxy may inject {"message":"forbidden"} JSON
+      // blobs before the real SSE payload (repeatedly). Strip them before the
+      // line parser sees them — the parser would choke on the bare JSON.
+      if (provider === "autoclaw" && text.includes(`"message":"forbidden"`)) {
+        text = stripAutoclawWafPrefixes(text);
+      }
       buffer += text;
       reqLogger?.appendProviderChunk?.(text);
 

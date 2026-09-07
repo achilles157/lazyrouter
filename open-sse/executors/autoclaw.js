@@ -2,41 +2,44 @@ import crypto from "node:crypto";
 import { DefaultExecutor } from "./default.js";
 import { PROVIDERS } from "../config/providers.js";
 import { PROVIDER_MODELS } from "../config/providerModels.js";
+import { dbg } from "../utils/debugLog.js";
+import { stripAutoclawWafPrefixes } from "../utils/autoclawWaf.js";
+import {
+  AUTOCLAW_INFERENCE_BASE,
+  autoclawInferenceHeaders,
+  autoclawRouteId,
+  autoclawBodyModel,
+} from "../utils/autoclawSign.js";
 
-const APP_ID = "100003";
-const APP_KEY = "38d2391985e2369a5fb8227d8e6cd5e5";
+/**
+ * AutoClaw executor — ported from hirotomasato/autoclawpi (app v1.17.9 methods).
+ *
+ * Differences vs the old (1.10.0 web-client) implementation:
+ *   - Inference goes through the desktop proxy path:
+ *       {base}/autoclaw-proxy/proxy/autoclaw/v1/chat/completions
+ *     (the old path without /v1 is the web client's and no longer reliable).
+ *   - Inference headers are unsigned but MUST carry X-Harness-Type: zcode and
+ *     X-Version: 1.17.9 (desktop identity), plus X-Request-Model = route id.
+ *   - Model strings map to route ids: glm-5.3 → zaicoding_glm-5.3,
+ *     glm-5-turbo → zai_glm-5-turbo, deepseek-v4-pro → tdpsk_deepseek-v4-pro-202606.
+ *   - Upstream body model is the route id without its family prefix.
+ *   - WAF gate: upstream may inject {"message":"forbidden"} blobs into the SSE
+ *     stream — stripped in utils/stream.js via stripAutoclawWafPrefixes (also
+ *     used here for non-streaming bodies).
+ *   - 403 = hard WAF block on this account/IP; let the caller fall back to the
+ *     next account (shouldFallback via error status).
+ */
 
-function signHeaders(extra = {}) {
-  const ts = String(Math.floor(Date.now() / 1000));
-  const sign = crypto.createHash("md5").update(`${APP_ID}&${ts}&${APP_KEY}`).digest("hex");
-  return {
-    accept: "*/*",
-    "content-type": "application/json",
-    origin: "https://autoclaw.z.ai",
-    referer: "https://autoclaw.z.ai/",
-    "user-agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-    "x-auth-appid": APP_ID,
-    "x-auth-timestamp": ts,
-    "x-auth-sign": sign,
-    "x-product": "autoclaw",
-    "x-version": "1.9.1",
-    "x-tm": "win",
-    "x-trace-id": crypto.randomUUID(),
-    ...extra,
-  };
-}
-
-function resolveUpstreamModel(model) {
-  const models = PROVIDER_MODELS["ac"] || PROVIDER_MODELS["autoclaw"] || [];
-  const match = models.find((m) => m.id === model || m.alias === model);
-  return match?.upstreamModelId || model;
-}
+export { stripAutoclawWafPrefixes as stripWafPrefixes };
 
 export class AutoclawExecutor extends DefaultExecutor {
   constructor() {
-    super("autoclaw", PROVIDERS.autoclaw || { baseUrl: "", headers: {} });
+    super("autoclaw", PROVIDERS.autoclaw || { baseUrl: `${AUTOCLAW_INFERENCE_BASE}/v1/chat/completions`, format: "openai", headers: {} });
     this._currentModel = null;
+  }
+
+  buildUrl(_model, _stream, _urlIndex = 0, _credentials = null) {
+    return `${AUTOCLAW_INFERENCE_BASE}/v1/chat/completions`;
   }
 
   buildHeaders(credentials, stream) {
@@ -44,28 +47,26 @@ export class AutoclawExecutor extends DefaultExecutor {
     if (!token) {
       throw new Error("autoclaw: missing accessToken");
     }
-    const rawToken = token.replace(/^Bearer\s+/i, "");
-    const extras = {
-      "X-Authorization": rawToken,
-      "X-Request-Id": crypto.randomUUID(),
-      Accept: stream ? "text/event-stream" : "*/*",
-    };
-    if (this._currentModel) {
-      extras["X-Request-Model"] = resolveUpstreamModel(this._currentModel);
-    }
-    return signHeaders(extras);
+    return autoclawInferenceHeaders(token, this._routeId, stream);
   }
 
-  transformRequest(model, body, _stream, _credentials) {
-    return { ...body, stream: true, model: "x" };
+  transformRequest(model, body, stream, _credentials) {
+    // Upstream expects the bare model (route id minus family prefix).
+    return { ...body, model: autoclawBodyModel(autoclawRouteId(model)) };
   }
 
   async execute(args) {
     this._currentModel = args.model;
+    this._routeId = autoclawRouteId(args.model);
     try {
-      return await super.execute(args);
+      const result = await super.execute(args);
+      if (result?.response && !result.response.ok) {
+        dbg("AUTOCLAW", `upstream ${result.response.status}`);
+      }
+      return result;
     } finally {
       this._currentModel = null;
+      this._routeId = null;
     }
   }
 

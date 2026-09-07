@@ -1,42 +1,23 @@
-import crypto from "node:crypto";
+import {
+  AUTOCLAW_BASE_URL,
+  autoclawUserapiHeaders,
+} from "../../utils/autoclawSign.js";
 
-const BASE_URL = "https://autoglm-api.autoglm.ai";
-const APP_ID = "100003";
-const APP_KEY = "38d2391985e2369a5fb8227d8e6cd5e5";
-
-function signHeaders(extra = {}) {
-  const ts = String(Math.floor(Date.now() / 1000));
-  const sign = crypto.createHash("md5").update(`${APP_ID}&${ts}&${APP_KEY}`).digest("hex");
-  return {
-    accept: "*/*",
-    "content-type": "application/json",
-    origin: "https://autoclaw.z.ai",
-    referer: "https://autoclaw.z.ai/",
-    "user-agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-    "x-auth-appid": APP_ID,
-    "x-auth-timestamp": ts,
-    "x-auth-sign": sign,
-    "x-product": "autoclaw",
-    "x-version": "1.10.0",
-    "x-tm": "web",
-    "x-channel": "official",
-    "x-client-type": "web",
-    "x-trace-id": crypto.randomUUID(),
-    "x-lang": "zh-CN",
-    ...extra,
-  };
-}
-
+/**
+ * AutoClaw wallet balance — ported from hirotomasato/autoclawpi (fetchBalance).
+ * Endpoint: GET /agent-assetmgr/api/v1/wallet-instances?biz_app_id=autoclaw
+ * (the old /api/v2/wallets was the web-client route). Signed userapi headers
+ * with lowercase `authorization` carrying the raw access token.
+ */
 export async function getAutoclawBalance(accessToken, _providerSpecificData = {}, _proxyOptions = null) {
   if (!accessToken) {
     throw new Error("autoclaw: accessToken required for wallet lookup");
   }
   const token = accessToken.replace(/^Bearer\s+/i, "");
 
-  const res = await fetch(`${BASE_URL}/agent-assetmgr/api/v2/wallets?biz_app_id=autoclaw`, {
+  const res = await fetch(`${AUTOCLAW_BASE_URL}/agent-assetmgr/api/v1/wallet-instances?biz_app_id=autoclaw`, {
     method: "GET",
-    headers: signHeaders({ authorization: `Bearer ${token}` }),
+    headers: autoclawUserapiHeaders({ authorization: `Bearer ${token}` }),
   });
 
   if (!res.ok) {
