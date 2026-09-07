@@ -456,54 +456,33 @@ exports[`GOLDEN buildHeaders (default executor providers) > codebuddy → header
     "Accept": "text/event-stream",
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
-    "User-Agent": "CLI/2.105.2 CodeBuddy/2.105.2",
-    "X-App": "cli",
-    "X-Domain": "www.codebuddy.ai",
-    "X-IDE-Name": "CLI",
-    "X-IDE-Type": "CLI",
-    "X-IDE-Version": "2.105.2",
-    "X-Private-Data": "false",
+    "User-Agent": "IDE/2.108.1 CodeBuddy/2.108.1",
+    "X-IDE-Name": "IDE",
+    "X-IDE-Type": "IDE",
     "X-Product": "SaaS",
-    "X-Requested-With": "XMLHttpRequest",
-    "X-Stainless-Helper-Method": "stream",
-    "X-Stainless-Lang": "js",
-    "X-Stainless-Retry-Count": "0",
-    "X-Stainless-Runtime": "node",
+    "x-codebuddy-request": "1",
+    "x-requested-with": "XMLHttpRequest",
   },
   "nonStream": {
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
-    "User-Agent": "CLI/2.105.2 CodeBuddy/2.105.2",
-    "X-App": "cli",
-    "X-Domain": "www.codebuddy.ai",
-    "X-IDE-Name": "CLI",
-    "X-IDE-Type": "CLI",
-    "X-IDE-Version": "2.105.2",
-    "X-Private-Data": "false",
+    "User-Agent": "IDE/2.108.1 CodeBuddy/2.108.1",
+    "X-IDE-Name": "IDE",
+    "X-IDE-Type": "IDE",
     "X-Product": "SaaS",
-    "X-Requested-With": "XMLHttpRequest",
-    "X-Stainless-Helper-Method": "stream",
-    "X-Stainless-Lang": "js",
-    "X-Stainless-Retry-Count": "0",
-    "X-Stainless-Runtime": "node",
+    "x-codebuddy-request": "1",
+    "x-requested-with": "XMLHttpRequest",
   },
   "oauth": {
     "Accept": "text/event-stream",
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
-    "User-Agent": "CLI/2.105.2 CodeBuddy/2.105.2",
-    "X-App": "cli",
-    "X-Domain": "www.codebuddy.ai",
-    "X-IDE-Name": "CLI",
-    "X-IDE-Type": "CLI",
-    "X-IDE-Version": "2.105.2",
-    "X-Private-Data": "false",
+    "User-Agent": "IDE/2.108.1 CodeBuddy/2.108.1",
+    "X-IDE-Name": "IDE",
+    "X-IDE-Type": "IDE",
     "X-Product": "SaaS",
-    "X-Requested-With": "XMLHttpRequest",
-    "X-Stainless-Helper-Method": "stream",
-    "X-Stainless-Lang": "js",
-    "X-Stainless-Retry-Count": "0",
-    "X-Stainless-Runtime": "node",
+    "x-codebuddy-request": "1",
+    "x-requested-with": "XMLHttpRequest",
   },
 }
 `;
@@ -636,6 +615,28 @@ exports[`GOLDEN buildHeaders (default executor providers) > fireworks → header
     "Accept": "text/event-stream",
     "Authorization": "Bearer <TOK>",
     "Content-Type": "application/json",
+  },
+}
+`;
+
+exports[`GOLDEN buildHeaders (default executor providers) > freebuff → headers (apiKey / oauth) 1`] = `
+{
+  "apiKey": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "User-Agent": "ai-sdk/openai-compatible/1.0/codebuff",
+  },
+  "nonStream": {
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "User-Agent": "ai-sdk/openai-compatible/1.0/codebuff",
+  },
+  "oauth": {
+    "Accept": "text/event-stream",
+    "Authorization": "Bearer <TOK>",
+    "Content-Type": "application/json",
+    "User-Agent": "ai-sdk/openai-compatible/1.0/codebuff",
   },
 }
 `;
@@ -1575,6 +1576,13 @@ exports[`GOLDEN buildUrl (default executor providers) > fireworks → url (strea
 {
   "nonStream": "https://api.fireworks.ai/inference/v1/chat/completions",
   "stream": "https://api.fireworks.ai/inference/v1/chat/completions",
+}
+`;
+
+exports[`GOLDEN buildUrl (default executor providers) > freebuff → url (stream + non-stream) 1`] = `
+{
+  "nonStream": "https://www.codebuff.com/api/v1/chat/completions",
+  "stream": "https://www.codebuff.com/api/v1/chat/completions",
 }
 `;
 

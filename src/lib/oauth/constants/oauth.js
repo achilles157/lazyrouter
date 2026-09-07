@@ -120,6 +120,10 @@ export const CODEBUDDY_INTL_CONFIG = { ...PROVIDER_OAUTH["codebuddy"] };
 // Kimchi OAuth Configuration (Browser token callback flow)
 export const KIMCHI_CONFIG = { ...PROVIDER_OAUTH["kimchi"] };
 
+// Freebuff (Codebuff) OAuth Configuration — CLI fingerprint device-flow.
+// Login host freebuff.com; LLM traffic on www.codebuff.com (see providers/freebuff.js).
+export const FREEBUFF_CONFIG = { ...PROVIDER_OAUTH["freebuff"] };
+
 // Grok CLI / Grok Build OAuth Configuration (Device Code Flow)
 // Endpoint: cli-chat-proxy.grok.com — same client_id as xai, different flow + scopes
 export const GROK_CLI_CONFIG = { ...PROVIDER_OAUTH["grok-cli"] };

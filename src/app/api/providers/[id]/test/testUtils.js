@@ -102,6 +102,21 @@ const OAUTH_TEST_CONFIG = {
     },
     refreshable: false,
   },
+  freebuff: {
+    url: "https://www.codebuff.com/api/v1/freebuff/session",
+    method: "GET",
+    authHeader: "Authorization",
+    authPrefix: "Bearer ",
+    extraHeaders: {
+      Accept: "application/json",
+      "User-Agent": "codebuff-cli/0.0.138",
+    },
+    acceptStatuses: [403, 404],
+    softFailMessage: {
+      403: "Connected, but Freebuff is gated (403) — country blocked or account banned.",
+    },
+    refreshable: false,
+  },
   // Grok CLI / Grok Build — probe /v1/user (no inference quota). Headers mirror official CLI.
   "grok-cli": {
     url: PROVIDERS["grok-cli"]?.userUrl || "https://cli-chat-proxy.grok.com/v1/user",
