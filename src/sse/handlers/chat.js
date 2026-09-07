@@ -6,7 +6,11 @@ import {
   clearAccountError,
   extractApiKey,
   isValidApiKey,
+  isProviderAllowed,
+  isComboAllowed,
+  isKindAllowed,
 } from "../services/auth.js";
+import { isTrustedInternalRequest } from "../services/internalTrust.js";
 import {
   isProviderInCooldown,
   isProviderFullyBlocked,
@@ -76,18 +80,27 @@ export async function handleChat(request, clientRawRequest = null) {
     log.debug("AUTH", "No API key provided (local mode)");
   }
 
-  // Enforce API key if enabled in settings
+  // Enforce API key if enabled in settings. Trusted internal (dashboard/CLI)
+  // requests act as the local owner — bypass ACL.
   const settings = await getSettings();
-  if (settings.requireApiKey) {
+  let apiKeyInfo = null;
+  const trustedInternal = await isTrustedInternalRequest(request);
+  if (!trustedInternal && settings.requireApiKey) {
     if (!apiKey) {
       log.warn("AUTH", "Missing API key (requireApiKey=true)");
       return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
     }
-    const valid = await isValidApiKey(apiKey);
-    if (!valid) {
+    apiKeyInfo = await isValidApiKey(apiKey);
+    if (!apiKeyInfo) {
       log.warn("AUTH", "Invalid API key (requireApiKey=true)");
       return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key");
     }
+  }
+
+  // ACL: check if LLM kind is allowed for this API key
+  if (!isKindAllowed(apiKeyInfo, "llm")) {
+    log.warn("AUTH", "LLM kind not allowed for API key");
+    return errorResponse(HTTP_STATUS.FORBIDDEN, "Chat/LLM requests are not allowed for this API key");
   }
 
   if (!modelStr) {
@@ -105,6 +118,11 @@ export async function handleChat(request, clientRawRequest = null) {
   // Check if model is a combo (has multiple models with fallback)
   const comboModels = await getComboModels(modelStr);
   if (comboModels) {
+    // ACL: check if this combo is allowed for this API key
+    if (!isComboAllowed(apiKeyInfo, modelStr)) {
+      log.warn("AUTH", `Combo "${modelStr}" not allowed for API key`);
+      return errorResponse(HTTP_STATUS.FORBIDDEN, `Combo "${modelStr}" is not allowed for this API key`);
+    }
     // Check for combo-specific strategy first, fallback to global
     const comboStrategies = settings.comboStrategies || {};
     const comboSpecificStrategy = comboStrategies[modelStr]?.fallbackStrategy;
@@ -229,6 +247,12 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   }
 
   const { provider, model } = modelInfo;
+
+  // ACL: check if provider is allowed for this API key
+  if (!(await isProviderAllowed(apiKeyInfo, provider))) {
+    log.warn("AUTH", `Provider "${provider}" not allowed for API key`, { provider });
+    return errorResponse(HTTP_STATUS.FORBIDDEN, `Provider "${provider}" is not allowed for this API key`);
+  }
 
   // Routing shown in the unified "▶" line (client model → provider/model)
 

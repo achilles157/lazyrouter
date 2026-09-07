@@ -3,7 +3,7 @@ import { resolveConnectionProxyConfig, pickProxyPoolId } from "@/lib/network/con
 import { formatRetryAfter, checkFallbackError, isModelLockActive, buildModelLockUpdate, getEarliestModelLockUntil } from "open-sse/services/accountFallback.js";
 import { classify429 } from "open-sse/utils/classify429.js";
 import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
-import { resolveProviderId, FREE_PROVIDERS } from "@/shared/constants/providers.js";
+import { resolveProviderId, getProviderAlias, FREE_PROVIDERS } from "@/shared/constants/providers.js";
 import { getAntigravityQuotaCache } from "./antigravityQuota.js";
 import * as log from "../utils/logger.js";
 
@@ -365,9 +365,42 @@ export function extractApiKey(request) {
 }
 
 /**
- * Validate API key (optional - for local use can skip)
+ * Validate API key (optional - for local use can skip).
+ * Returns the full apiKeyInfo row (with ACL allow-lists) or null.
  */
 export async function isValidApiKey(apiKey) {
-  if (!apiKey) return false;
+  if (!apiKey) return null;
   return await validateApiKey(apiKey);
+}
+
+// ── Per-API-key ACL (tri-state: null=all, []=none, [x]=whitelist) ──
+
+export async function isProviderAllowed(apiKeyInfo, providerIdOrAlias) {
+  if (!apiKeyInfo) return true;
+  const allowed = apiKeyInfo.allowedProviders;
+  if (allowed === null || allowed === undefined) return true; // null = all
+  if (!Array.isArray(allowed) || allowed.length === 0) return false; // [] = none
+  if (allowed.includes(providerIdOrAlias)) return true;
+  const alias = getProviderAlias(providerIdOrAlias);
+  if (alias !== providerIdOrAlias && allowed.includes(alias)) return true;
+  const resolvedId = resolveProviderId(providerIdOrAlias);
+  if (resolvedId !== providerIdOrAlias && allowed.includes(resolvedId)) return true;
+  return false;
+}
+
+export function isComboAllowed(apiKeyInfo, comboName) {
+  if (!apiKeyInfo) return true;
+  const name = comboName.startsWith("combo/") ? comboName.slice(6) : comboName;
+  const allowed = apiKeyInfo.allowedCombos;
+  if (allowed === null || allowed === undefined) return true;
+  if (!Array.isArray(allowed) || allowed.length === 0) return false;
+  return allowed.includes(name);
+}
+
+export function isKindAllowed(apiKeyInfo, kind) {
+  if (!apiKeyInfo) return true;
+  const allowed = apiKeyInfo.allowedKinds;
+  if (allowed === null || allowed === undefined) return true; // null = all
+  if (!Array.isArray(allowed) || allowed.length === 0) return false; // [] = none
+  return allowed.includes(kind);
 }

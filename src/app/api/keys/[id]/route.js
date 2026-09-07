@@ -21,7 +21,7 @@ export async function PUT(request, { params }) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { isActive } = body;
+    const { isActive, name, allowedProviders, allowedCombos, allowedKinds } = body;
 
     const existing = await getApiKeyById(id);
     if (!existing) {
@@ -30,6 +30,27 @@ export async function PUT(request, { params }) {
 
     const updateData = {};
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (name !== undefined) updateData.name = name;
+    // ACL allow-lists — tri-state: null=all, []=none, [ids...]=whitelist.
+    // Only applied when the field is explicitly present (absence keeps value).
+    if ("allowedProviders" in body) {
+      if (allowedProviders !== null && !Array.isArray(allowedProviders)) {
+        return NextResponse.json({ error: "allowedProviders must be null or an array of provider ids/aliases" }, { status: 400 });
+      }
+      updateData.allowedProviders = allowedProviders;
+    }
+    if ("allowedCombos" in body) {
+      if (allowedCombos !== null && !Array.isArray(allowedCombos)) {
+        return NextResponse.json({ error: "allowedCombos must be null or an array of combo names" }, { status: 400 });
+      }
+      updateData.allowedCombos = allowedCombos;
+    }
+    if ("allowedKinds" in body) {
+      if (allowedKinds !== null && !Array.isArray(allowedKinds)) {
+        return NextResponse.json({ error: "allowedKinds must be null or an array of kinds (llm, embedding, image, tts, stt, web)" }, { status: 400 });
+      }
+      updateData.allowedKinds = allowedKinds;
+    }
 
     const updated = await updateApiKey(id, updateData);
 

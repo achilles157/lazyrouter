@@ -17,6 +17,8 @@ import { resolveCursorModels } from "open-sse/services/cursorModels.js";
 import { resolveZedModels } from "open-sse/shared/zedAuth.js";
 import { updateProviderCredentials } from "@/sse/services/tokenRefresh";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
+import { extractApiKey, isValidApiKey, isProviderAllowed, isComboAllowed, isKindAllowed } from "@/sse/services/auth.js";
+import { getSettings } from "@/lib/localDb";
 import { capabilitiesFromServiceKind, getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
 
 // Per-provider live model resolvers. Each receives a connection record and
@@ -562,7 +564,44 @@ export async function GET(request) {
   try {
     // Detect cross-instance recursive /models fetch (another 9router fetching our /models)
     const skipDynamicFetch = request?.headers?.get(INTERNAL_MODELS_FETCH_HEADER) === "1";
-    const data = await buildModelsList([LLM_KIND], { skipDynamicFetch });
+
+    // ACL: filter the model list to what the calling API key may see.
+    const settings = await getSettings();
+    let apiKeyInfo = null;
+    if (settings.requireApiKey) {
+      const apiKey = extractApiKey(request);
+      if (!apiKey) {
+        return Response.json(
+          { error: { message: "Missing API key", type: "authentication_error" } },
+          { status: 401, headers: { "Access-Control-Allow-Origin": "*" } }
+        );
+      }
+      apiKeyInfo = await isValidApiKey(apiKey);
+      if (!apiKeyInfo) {
+        return Response.json(
+          { error: { message: "Invalid API key", type: "authentication_error" } },
+          { status: 401, headers: { "Access-Control-Allow-Origin": "*" } }
+        );
+      }
+    }
+
+    let data = await buildModelsList([LLM_KIND], { skipDynamicFetch });
+
+    if (apiKeyInfo) {
+      const allowedOwners = new Map();
+      data = data.filter((model) => {
+        if (!isKindAllowed(apiKeyInfo, model.kind || LLM_KIND)) return false;
+        const isCombo = model.owned_by === "combo";
+        const owner = isCombo ? model.id : (model.id.includes("/") ? model.id.split("/")[0] : model.owned_by);
+        if (!allowedOwners.has(owner)) {
+          allowedOwners.set(owner, isCombo
+            ? isComboAllowed(apiKeyInfo, owner)
+            : isProviderAllowed(apiKeyInfo, owner));
+        }
+        return allowedOwners.get(owner);
+      });
+    }
+
     return Response.json({ object: "list", data }, {
       headers: { "Access-Control-Allow-Origin": "*" },
     });

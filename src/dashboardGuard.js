@@ -148,7 +148,8 @@ function extractApiKey(request) {
 async function hasValidApiKey(request) {
   const apiKey = extractApiKey(request);
   if (!apiKey) return false;
-  return await validateApiKey(apiKey);
+  // validateApiKey returns the key row (truthy) or null — boolean coercion preserved.
+  return !!(await validateApiKey(apiKey));
 }
 
 async function canAccessPublicLlmApi(request) {
