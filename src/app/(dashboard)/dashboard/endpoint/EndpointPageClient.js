@@ -25,6 +25,13 @@ export default function APIPageClient({ machineId }) {
   const [createdKey, setCreatedKey] = useState(null);
   const [confirmState, setConfirmState] = useState(null);
 
+  // ACL editor state
+  const [aclKey, setAclKey] = useState(null); // key being edited
+  const [aclDraft, setAclDraft] = useState({ mode: "all", providers: [], combos: [], kinds: [] });
+  const [aclSaving, setAclSaving] = useState(false);
+  const [providerOptions, setProviderOptions] = useState([]);
+  const [comboOptions, setComboOptions] = useState([]);
+
   const [requireApiKey, setRequireApiKey] = useState(false);
   const [requireLogin, setRequireLogin] = useState(true);
   const [hasPassword, setHasPassword] = useState(true);
@@ -687,6 +694,84 @@ export default function APIPageClient({ machineId }) {
     return fullKey.slice(0, 6) + "•".repeat(fullKey.length - 10) + fullKey.slice(-4);
   };
 
+  // ── ACL editor ──────────────────────────────────────────────
+  const ACL_KINDS = ["llm", "embedding", "image", "tts", "stt", "web"];
+
+  const hasAclRestriction = (key) =>
+    Array.isArray(key?.allowedProviders) ||
+    Array.isArray(key?.allowedCombos) ||
+    Array.isArray(key?.allowedKinds);
+
+  const openAclEditor = async (key) => {
+    const mode = hasAclRestriction(key) ? "whitelist" : "all";
+    setAclDraft({
+      mode,
+      providers: Array.isArray(key.allowedProviders) ? key.allowedProviders : [],
+      combos: Array.isArray(key.allowedCombos) ? key.allowedCombos : [],
+      kinds: Array.isArray(key.allowedKinds) ? key.allowedKinds : [],
+    });
+    setAclKey(key);
+    // Lazy-load options once
+    if (providerOptions.length === 0) {
+      try {
+        const { AI_PROVIDERS } = await import("@/shared/constants/providers");
+        const list = Object.values(AI_PROVIDERS)
+          .filter((p) => !p.hidden)
+          .map((p) => ({ id: p.id, name: p.name || p.id }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        setProviderOptions(list);
+      } catch {}
+    }
+    if (comboOptions.length === 0) {
+      try {
+        const res = await fetch("/api/combos");
+        if (res.ok) {
+          const data = await res.json();
+          const list = (data.combos || data || [])
+            .map((c) => ({ id: c.name, name: c.name }))
+            .filter((c) => c.id);
+          setComboOptions(list);
+        }
+      } catch {}
+    }
+  };
+
+  const toggleAclItem = (field, id) => {
+    setAclDraft((prev) => {
+      const list = prev[field];
+      return { ...prev, [field]: list.includes(id) ? list.filter((x) => x !== id) : [...list, id] };
+    });
+  };
+
+  const handleSaveAcl = async () => {
+    if (!aclKey) return;
+    setAclSaving(true);
+    try {
+      const payload = aclDraft.mode === "all"
+        ? { allowedProviders: null, allowedCombos: null, allowedKinds: null }
+        : {
+            // Empty selection = deny everything (tri-state [] semantics).
+            allowedProviders: aclDraft.providers,
+            allowedCombos: aclDraft.combos,
+            allowedKinds: aclDraft.kinds,
+          };
+      const res = await fetch(`/api/keys/${aclKey.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setKeys((prev) => prev.map((k) => (k.id === aclKey.id ? { ...k, ...data.key } : k)));
+        setAclKey(null);
+      }
+    } catch (error) {
+      console.log("Error saving ACL:", error);
+    } finally {
+      setAclSaving(false);
+    }
+  };
+
   const toggleKeyVisibility = (keyId) => {
     setVisibleKeys(prev => {
       const next = new Set(prev);
@@ -1039,11 +1124,32 @@ export default function APIPageClient({ machineId }) {
                   <p className="text-xs text-text-muted mt-1">
                     Created {new Date(key.createdAt).toLocaleDateString()}
                   </p>
-                  {key.isActive === false && (
-                    <p className="text-xs text-orange-500 mt-1">Paused</p>
-                  )}
+                  <div className="flex items-center gap-2 mt-1">
+                    {key.isActive === false && (
+                      <p className="text-xs text-orange-500">Paused</p>
+                    )}
+                    {hasAclRestriction(key) && (
+                      <span
+                        className="text-[11px] px-1.5 py-0.5 rounded bg-primary/10 text-primary"
+                        title={`Restricted to: ${[
+                          Array.isArray(key.allowedProviders) && key.allowedProviders.length ? `providers: ${key.allowedProviders.join(", ")}` : null,
+                          Array.isArray(key.allowedCombos) && key.allowedCombos.length ? `combos: ${key.allowedCombos.join(", ")}` : null,
+                          Array.isArray(key.allowedKinds) && key.allowedKinds.length ? `kinds: ${key.allowedKinds.join(", ")}` : null,
+                        ].filter(Boolean).join(" | ")}`}
+                      >
+                        restricted
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openAclEditor(key)}
+                    className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-primary transition-all"
+                    title="Access control (providers, combos, kinds)"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">shield_lock</span>
+                  </button>
                   <Toggle
                     size="sm"
                     checked={key.isActive ?? true}
@@ -1142,6 +1248,105 @@ export default function APIPageClient({ machineId }) {
           <Button onClick={() => setCreatedKey(null)} fullWidth>
             Done
           </Button>
+        </div>
+      </Modal>
+
+      {/* ACL Editor Modal */}
+      <Modal
+        isOpen={!!aclKey}
+        title={`Access Control — ${aclKey?.name || ""}`}
+        onClose={() => setAclKey(null)}
+      >
+        <div className="flex flex-col gap-4">
+          {/* Mode selector */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setAclDraft((prev) => ({ ...prev, mode: "all" }))}
+              className={`flex-1 p-3 text-left border rounded-lg transition-colors ${aclDraft.mode === "all" ? "border-primary bg-primary/5" : "border-border hover:bg-surface-2"}`}
+            >
+              <p className="text-sm font-medium">Unrestricted</p>
+              <p className="text-xs text-text-muted">Full access to all providers, combos, and kinds.</p>
+            </button>
+            <button
+              onClick={() => setAclDraft((prev) => ({ ...prev, mode: "whitelist" }))}
+              className={`flex-1 p-3 text-left border rounded-lg transition-colors ${aclDraft.mode === "whitelist" ? "border-primary bg-primary/5" : "border-border hover:bg-surface-2"}`}
+            >
+              <p className="text-sm font-medium">Restricted</p>
+              <p className="text-xs text-text-muted">Only the items selected below are allowed.</p>
+            </button>
+          </div>
+
+          {aclDraft.mode === "whitelist" && (
+            <>
+              {/* Kinds */}
+              <div>
+                <p className="text-sm font-medium mb-2">Kinds</p>
+                <p className="text-xs text-text-muted mb-2">
+                  Leave everything unchecked to deny all requests for this key.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {ACL_KINDS.map((kind) => (
+                    <button
+                      key={kind}
+                      onClick={() => toggleAclItem("kinds", kind)}
+                      className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${aclDraft.kinds.includes(kind) ? "bg-primary text-white border-primary" : "border-border hover:bg-surface-2"}`}
+                    >
+                      {kind}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Providers */}
+              <div>
+                <p className="text-sm font-medium mb-2">Providers</p>
+                <p className="text-xs text-text-muted mb-2">
+                  Leave everything unchecked to deny all providers.
+                </p>
+                <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                  {providerOptions.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => toggleAclItem("providers", p.id)}
+                      className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${aclDraft.providers.includes(p.id) ? "bg-primary text-white border-primary" : "border-border hover:bg-surface-2"}`}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                  {providerOptions.length === 0 && (
+                    <p className="text-xs text-text-muted">Loading providers…</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Combos */}
+              {comboOptions.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium mb-2">Combos</p>
+                  <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                    {comboOptions.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => toggleAclItem("combos", c.id)}
+                        className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${aclDraft.combos.includes(c.id) ? "bg-primary text-white border-primary" : "border-border hover:bg-surface-2"}`}
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          <div className="flex gap-2">
+            <Button onClick={handleSaveAcl} fullWidth disabled={aclSaving}>
+              {aclSaving ? "Saving…" : "Save"}
+            </Button>
+            <Button onClick={() => setAclKey(null)} variant="ghost" fullWidth>
+              Cancel
+            </Button>
+          </div>
         </div>
       </Modal>
 

@@ -59,6 +59,7 @@ export default function TokenSaverClient() {
   const [pxpipeActionLoading, setPxpipeActionLoading] = useState(false);
   const [pxpipeActionError, setPxpipeActionError] = useState("");
   const [locale, setLocale] = useState("en");
+  const [guards, setGuards] = useState({ loopGuard: true, circuitBreaker: true });
 
   const { copied, copy } = useCopyToClipboard();
 
@@ -90,6 +91,11 @@ export default function TokenSaverClient() {
     } catch (error) {
       console.log("Error updating setting:", error);
     }
+  };
+
+  const updateGuard = (key, value) => {
+    setGuards((prev) => ({ ...prev, [key]: value }));
+    patchSetting({ [`${key}Enabled`]: value });
   };
 
   const handleRtkEnabled = async (value) => {
@@ -432,6 +438,10 @@ export default function TokenSaverClient() {
           setPonytailLevel(data.ponytailLevel || "full");
           setPxpipeEnabled(!!data.pxpipeEnabled);
           if (typeof data.pxpipeMinChars === "number") setPxpipeMinChars(data.pxpipeMinChars);
+          setGuards({
+            loopGuard: data.loopGuardEnabled !== false && data.loopGuardEnabled !== 0,
+            circuitBreaker: data.circuitBreakerEnabled !== false && data.circuitBreakerEnabled !== 0,
+          });
           refreshHeadroomStatus();
           // PRD: run the PXPIPE health check automatically when the page opens
           refreshPxpipeStatus().then(runPxpipeHealth);
@@ -787,6 +797,47 @@ export default function TokenSaverClient() {
           />
         </div>
         )}
+      </Card>
+
+      <Card id="guards">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary">
+              shield
+            </span>
+            Guards & Shields
+          </h2>
+        </div>
+
+        {/* Circuit Breaker */}
+        <div className="flex items-center justify-between py-4 border-b border-border gap-4 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">Circuit Breaker</p>
+            <p className="text-sm text-text-muted">
+              Temporarily halts upstream calls for offline or failing providers
+              to prevent spamming and conserve connection resource.
+            </p>
+          </div>
+          <Toggle
+            checked={guards.circuitBreaker}
+            onChange={() => updateGuard("circuitBreaker", !guards.circuitBreaker)}
+          />
+        </div>
+
+        {/* Loop Guard */}
+        <div className="flex items-center justify-between pt-4 gap-4">
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">Loop Guard</p>
+            <p className="text-sm text-text-muted">
+              Detects repeating tool call sequences and text-only planning loops.
+              Injects corrections to prevent infinite agent run-loops.
+            </p>
+          </div>
+          <Toggle
+            checked={guards.loopGuard}
+            onChange={() => updateGuard("loopGuard", !guards.loopGuard)}
+          />
+        </div>
       </Card>
 
       <Modal
