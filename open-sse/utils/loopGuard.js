@@ -2,9 +2,12 @@
 // Analyzes messages array in the current request body - no cross-request state needed.
 // Returns { detected: bool, hint: string|null }
 
-const SINGLE_REPEAT_THRESHOLD = 3; // same tool+args appearing >= this many times
+const SINGLE_REPEAT_THRESHOLD = 3; // same tool+args appearing >= this many times in recent window
 const SEQUENCE_REPEAT_THRESHOLD = 2; // same sequence of N tool calls appearing >= this many times
 const MIN_SEQUENCE_LENGTH = 2; // minimum sequence length to detect
+const MAX_SEQUENCE_LENGTH = 8; // maximum sequence length to detect
+const RECENT_TOOL_WINDOW = 30; // only inspect recent tool calls (loops happen in recent turns)
+const RECENT_ASSISTANT_MSGS = 10; // only inspect recent assistant messages for text loops
 
 // Text-loop detection thresholds (symptom: model repeats planning/intent text
 // without ever making a tool call — e.g. "I need to read the key files..." 6×).
@@ -48,11 +51,12 @@ function extractToolCallSequence(messages) {
 }
 
 /**
- * Detect single tool call repeated >= SINGLE_REPEAT_THRESHOLD times.
+ * Detect single tool call repeated >= SINGLE_REPEAT_THRESHOLD times in recent window.
  */
 function detectSingleRepeat(seq) {
+  const window = seq.length > RECENT_TOOL_WINDOW ? seq.slice(-RECENT_TOOL_WINDOW) : seq;
   const counts = new Map();
-  for (const h of seq) {
+  for (const h of window) {
     counts.set(h, (counts.get(h) || 0) + 1);
     if (counts.get(h) >= SINGLE_REPEAT_THRESHOLD) return h;
   }
@@ -60,27 +64,62 @@ function detectSingleRepeat(seq) {
 }
 
 /**
+ * Fast O(L) check if the tail of the sequence repeats the preceding sequence.
+ * Catches active loops (e.g. A, B, A, B or A, B, C, A, B, C).
+ */
+function detectTailRepeat(seq) {
+  const n = seq.length;
+  const maxLen = Math.min(MAX_SEQUENCE_LENGTH, Math.floor(n / SEQUENCE_REPEAT_THRESHOLD));
+  for (let len = maxLen; len >= MIN_SEQUENCE_LENGTH; len--) {
+    let isRepeat = true;
+    for (let i = 0; i < len; i++) {
+      if (seq[n - len + i] !== seq[n - len * 2 + i]) {
+        isRepeat = false;
+        break;
+      }
+    }
+    if (isRepeat) {
+      return seq.slice(n - len).join("|");
+    }
+  }
+  return null;
+}
+
+/**
  * Detect a sequence of N tool calls that repeats >= SEQUENCE_REPEAT_THRESHOLD times.
- * Uses sliding window to find N-gram repeats.
+ * Inspects immediate tail first, then searches within RECENT_TOOL_WINDOW.
+ * Bound to at most RECENT_TOOL_WINDOW=30 items (executes in < 0.1ms).
  */
 function detectSequenceRepeat(seq) {
-  const n = seq.length;
-  // Try sequence lengths from largest to smallest (greedy)
-  for (let len = Math.floor(n / 2); len >= MIN_SEQUENCE_LENGTH; len--) {
+  const tail = detectTailRepeat(seq);
+  if (tail) return tail;
+
+  const window = seq.length > RECENT_TOOL_WINDOW ? seq.slice(-RECENT_TOOL_WINDOW) : seq;
+  const n = window.length;
+  const maxLen = Math.min(MAX_SEQUENCE_LENGTH, Math.floor(n / SEQUENCE_REPEAT_THRESHOLD));
+
+  for (let len = maxLen; len >= MIN_SEQUENCE_LENGTH; len--) {
     for (let start = 0; start <= n - len * 2; start++) {
-      const pattern = seq.slice(start, start + len).join("|");
-      let count = 0;
-      let pos = 0;
+      let count = 1;
+      let pos = start + len;
       while (pos <= n - len) {
-        const window = seq.slice(pos, pos + len).join("|");
-        if (window === pattern) {
+        let match = true;
+        for (let k = 0; k < len; k++) {
+          if (window[start + k] !== window[pos + k]) {
+            match = false;
+            break;
+          }
+        }
+        if (match) {
           count++;
+          if (count >= SEQUENCE_REPEAT_THRESHOLD) {
+            return window.slice(start, start + len).join("|");
+          }
           pos += len;
         } else {
           pos++;
         }
       }
-      if (count >= SEQUENCE_REPEAT_THRESHOLD) return pattern;
     }
   }
   return null;
@@ -149,7 +188,8 @@ function extractAssistantTexts(messages) {
  * @returns {{ detected: boolean, hint: string|null }}
  */
 function detectTextRepeat(messages) {
-  const texts = extractAssistantTexts(messages);
+  const allTexts = extractAssistantTexts(messages);
+  const texts = allTexts.length > RECENT_ASSISTANT_MSGS ? allTexts.slice(-RECENT_ASSISTANT_MSGS) : allTexts;
   if (texts.length < TEXT_MESSAGE_REPEAT_THRESHOLD) return { detected: false, hint: null };
 
   // 1. Exact message repeat (normalized)

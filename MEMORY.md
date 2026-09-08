@@ -44,6 +44,20 @@
 - **Bot Detection:** Google blocks default Playwright Chromium and Camoufox ("This browser or app may not be secure").
 - **Solution:** Use the "Chrome Real" engine in `src/lib/oauth/services/bulkImportBrowserEngine.js` which spawns the user's installed Google Chrome with `--remote-debugging-port` and connects via CDP.
 
+### 6. Per-API-Key ACL & Scope Safety
+- **Scope Leak Bug (Resolved):** In commit `c24b52d9`, `isProviderAllowed(apiKeyInfo, provider)` was added inside `handleSingleModelChat`, but `apiKeyInfo` was only declared in `handleChat` and never passed down. This caused `ReferenceError: apiKeyInfo is not defined` on all incoming `/v1/chat/completions` and `/v1/messages` calls.
+- **Fix:** Resolved `apiKeyInfo` when an API key is provided, passed `apiKeyInfo` through all single-model and combo dispatch routes down to `handleSingleModelChat`, and defaulted `apiKeyInfo = null` in the function signature.
+
+### 7. Loop Guard Event Loop Starvation & Dashboard Hang (Resolved)
+- **Symptom:** LazyRouter freezes at 100% CPU on single-thread Node.js event loop. Accessing `http://localhost:20128` or `/dashboard` or `/api/health` hangs with 0 bytes received or connection reset.
+- **Root Cause:** In `open-sse/utils/loopGuard.js`, `detectSequenceRepeat(seq)` ran an unbounded O(N^4) nested loop with `seq.slice().join("|")` across the full history. On large conversation histories (e.g. 500-1,400 messages sent by Claude Code), it took 10-25+ minutes of continuous CPU compute, locking the Node.js event loop.
+- **Fix:**
+  1. Fast O(L) tail repeat check directly via index comparisons without string allocation (detects active loops at execution tail).
+  2. Bounded sliding window search to the last 30 tool calls (`RECENT_TOOL_WINDOW = 30`) and max period 8 (`MAX_SEQUENCE_LENGTH = 8`).
+  3. Bounded text repeat detection to the last 10 assistant messages (`RECENT_ASSISTANT_MSGS = 10`).
+  4. Execution time dropped from >20 minutes to <0.6 milliseconds.
+
+
 ---
 
 ## Standard Rebuild & Packing Workflow
@@ -62,3 +76,4 @@ Start-Process lazyrouter -WindowStyle Hidden
 ## Session History References
 - `memory/lazyrouter-2026-09-01.md`: Fork migration, CodeBuddy reverse engineering, and build infrastructure restoration.
 - `memory/lazyrouter-2026-09-03.md`: Deep dive debugging on Kiro schema crash, Headroom proxy timeout tuning, AutoClaw wallet reverse engineering, and Z.ai WAF analysis.
+- `memory/lazyrouter-2026-09-08.md`: Fixed `ReferenceError: apiKeyInfo is not defined` regression from ACL feature merge in `src/sse/handlers/chat.js`. Process and port cleanup.
