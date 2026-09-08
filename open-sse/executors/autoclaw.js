@@ -4,6 +4,7 @@ import { PROVIDERS } from "../config/providers.js";
 import { PROVIDER_MODELS } from "../config/providerModels.js";
 import { dbg } from "../utils/debugLog.js";
 import { stripAutoclawWafPrefixes } from "../utils/autoclawWaf.js";
+import { autoclawRateLimitWait } from "../utils/autoclawRateLimiter.js";
 import {
   AUTOCLAW_INFERENCE_BASE,
   autoclawInferenceHeaders,
@@ -58,6 +59,17 @@ export class AutoclawExecutor extends DefaultExecutor {
   async execute(args) {
     this._currentModel = args.model;
     this._routeId = autoclawRouteId(args.model);
+    // Token bucket pacing (autoclawpi): wait for a slot before touching the
+    // upstream so rapid account-fallback fan-out doesn't trip the WAF.
+    try {
+      await autoclawRateLimitWait(args.signal, {
+        ratePerSec: Number(process.env.AUTOCLAW_RATE_PER_SEC) || undefined,
+        burst: Number(process.env.AUTOCLAW_RATE_BURST) || undefined,
+      });
+    } catch {
+      // Client aborted while queued — nothing to do; BaseExecutor's abort
+      // handling will produce the right error path.
+    }
     try {
       const result = await super.execute(args);
       if (result?.response && !result.response.ok) {
