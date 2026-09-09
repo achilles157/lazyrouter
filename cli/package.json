@@ -1,6 +1,6 @@
 {
   "name": "lazyrouter",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "LazyRouter CLI",
   "bin": {
     "9router": "./cli.js"

@@ -24,10 +24,12 @@
 export const RATE_LIMIT_COOLDOWN_MS = 60_000;
 /** Cooldown (ms) applied when a 429 is classified as quota exhaustion (~1h). */
 export const QUOTA_EXHAUSTED_COOLDOWN_MS = 3_600_000;
+/** Cooldown (ms) applied when a 429 is a transient concurrency limit / in-flight collision (~2s). */
+export const CONCURRENCY_LIMIT_COOLDOWN_MS = 2_000;
 
 /**
  * Failure kinds returned by {@link classify429}.
- * @typedef {"rate_limit" | "quota_exhausted" | "daily_quota"} FailureKind
+ * @typedef {"rate_limit" | "quota_exhausted" | "daily_quota" | "concurrency_limit"} FailureKind
  */
 
 /**
@@ -86,6 +88,21 @@ const QUOTA_EXHAUSTED_PATTERNS = [
 ];
 
 /**
+ * Heuristic regexes for **concurrency limit** — a transient collision when
+ * too many requests are in flight simultaneously on the same key/model.
+ * Requires a brief (~1-2s) backoff rather than a 60s/1h lockout.
+ */
+const CONCURRENCY_PATTERNS = [
+  /concurrency.*limit/i,
+  /concurrent.*request/i,
+  /too many concurrent/i,
+  /concurrency.*exceed/i,
+  /exceed.*concurrency/i,
+  /code"?\s*:\s*1200\b/i,
+  /limit 1200/i,
+];
+
+/**
  * Coerce a body of unknown shape to a string for keyword scanning.
  * - string: returned as-is
  * - object: JSON-stringified (so nested error.message gets scanned)
@@ -99,6 +116,17 @@ function bodyToText(body) {
   } catch {
     return "";
   }
+}
+
+/**
+ * Returns true if the body looks like a **concurrency limit** collision.
+ * Checked first because error messages may contain "rate" or "limit",
+ * but represent a transient 1-2s wait rather than a quota/account lock.
+ */
+export function looksLikeConcurrencyLimit(body) {
+  const text = bodyToText(body);
+  if (!text) return false;
+  return CONCURRENCY_PATTERNS.some((pat) => pat.test(text));
 }
 
 /**
@@ -173,12 +201,14 @@ export function getMsUntilTomorrowMidnightUTC(now = new Date()) {
  * Classify a 429 response into a `FailureKind` with its cooldown in ms.
  *
  * Decision order:
- * 1. status !== 429 → `{ kind: "rate_limit", cooldownMs: RATE_LIMIT_COOLDOWN_MS }`
+ * 1. body matches concurrency-limit keyword → `{ kind: "concurrency_limit", cooldownMs: CONCURRENCY_LIMIT_COOLDOWN_MS }`
+ *    (transient in-flight collision ~2s; must NOT lock account for 60s)
+ * 2. status !== 429 → `{ kind: "rate_limit", cooldownMs: RATE_LIMIT_COOLDOWN_MS }`
  *    (the caller is responsible for only passing 429s; for non-429 we still
  *    default to rate_limit cooldown as a safe fallback).
- * 2. body matches a daily-quota keyword → `{ kind: "daily_quota", cooldownMs: getMsUntilTomorrowMidnightUTC() }`
- * 3. body matches a quota-exhausted keyword → `{ kind: "quota_exhausted", cooldownMs: QUOTA_EXHAUSTED_COOLDOWN_MS }`
- * 4. otherwise → `{ kind: "rate_limit", cooldownMs: RATE_LIMIT_COOLDOWN_MS }`
+ * 3. body matches a daily-quota keyword → `{ kind: "daily_quota", cooldownMs: getMsUntilTomorrowMidnightUTC() }`
+ * 4. body matches a quota-exhausted keyword → `{ kind: "quota_exhausted", cooldownMs: QUOTA_EXHAUSTED_COOLDOWN_MS }`
+ * 5. otherwise → `{ kind: "rate_limit", cooldownMs: RATE_LIMIT_COOLDOWN_MS }`
  *    (a 429 without explicit quota wording is per-definition a rate-limit signal).
  *
  * @param {{ status?: number, body?: unknown, headers?: Record<string, string> }} response
@@ -187,6 +217,11 @@ export function getMsUntilTomorrowMidnightUTC(now = new Date()) {
 export function classify429(response) {
   if (!response) {
     return { kind: "rate_limit", cooldownMs: RATE_LIMIT_COOLDOWN_MS };
+  }
+  // Concurrency limit collision (e.g. B.AI code 1200 / "Concurrency limit reached")
+  // Transient in-flight wait (~2s) — must NOT lock account for 60s/1h.
+  if (looksLikeConcurrencyLimit(response.body)) {
+    return { kind: "concurrency_limit", cooldownMs: CONCURRENCY_LIMIT_COOLDOWN_MS };
   }
   // Gemini's generic "Resource has been exhausted" / "exceeded your current quota"
   // is its per-minute RPM limit (refreshes in ~60s), NOT a quota lock. Treat it

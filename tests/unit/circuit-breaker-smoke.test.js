@@ -84,5 +84,7 @@ describe("circuit breaker stack (ported from VansRouter)", () => {
     expect(classify429({ status: 429, body: "daily limit reached" }).kind).toBe("daily_quota");
     expect(classify429({ status: 429, body: "too many requests" }).kind).toBe("rate_limit");
     expect(classify429({ status: 429, body: "monthly quota exceeded" }).kind).toBe("quota_exhausted");
+    expect(classify429({ status: 429, body: "The request rate exceeds the current model Concurrency limit 1200." }).kind).toBe("concurrency_limit");
+    expect(classify429({ status: 429, body: "The request rate exceeds the current model Concurrency limit 1200." }).cooldownMs).toBe(2000);
   });
 });

@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { getProviderIconSrc, markProviderIconMissing } from "@/shared/utils/providerIcon";
-import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, CursorAuthModal, IFlowCookieModal, GitLabAuthModal, Toggle, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal } from "@/shared/components";
+import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, CursorAuthModal, IFlowCookieModal, GitLabAuthModal, AutoclawAutomationModal, Toggle, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal } from "@/shared/components";
 import { OAUTH_PROVIDERS, APIKEY_PROVIDERS, FREE_PROVIDERS, FREE_TIER_PROVIDERS, WEB_COOKIE_PROVIDERS, getProviderAlias, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, AI_PROVIDERS } from "@/shared/constants/providers";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
 import { getThinkingLevels } from "open-sse/providers/thinkingLevels.js";
@@ -156,7 +156,8 @@ export default function ProviderDetailPage() {
   const isCompatible = isOpenAICompatible || isAnthropicCompatible;
   const hasDualAuthModes = !isCompatible && isOAuth && supportsApiKeyAuth;
   const oauthConnectionLabel =
-    providerId === "xai" ? "Grok Build OAuth"
+    providerId === "autoclaw" ? "Import Token"
+    : providerId === "xai" ? "Grok Build OAuth"
     : providerId === "grok-cli" ? "Grok CLI Device Login"
     : providerId === "kimi" ? "Kimi Coding OAuth"
     : "OAuth";
@@ -1724,6 +1725,12 @@ export default function ProviderDetailPage() {
           providerInfo={providerInfo}
           onSuccess={handleOAuthSuccess}
           onClose={() => setShowOAuthModal(false)}
+        />
+      ) : providerId === "autoclaw" ? (
+        <AutoclawAutomationModal
+          isOpen={showOAuthModal}
+          onClose={() => setShowOAuthModal(false)}
+          onSaved={handleOAuthSuccess}
         />
       ) : (
         <OAuthModal

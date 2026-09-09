@@ -1,6 +1,6 @@
 {
   "name": "lazyrouter-app",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "LazyRouter - Custom AI router with bulk automation",
   "private": true,
   "scripts": {

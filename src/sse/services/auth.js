@@ -247,7 +247,7 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
   const githubResetAtMs = githubMonthlyResetMs(status, errorText, provider);
 
   // Provider-specific precise cooldown (e.g. codex usage_limit_reached resets_at) overrides backoff
-  let shouldFallback, cooldownMs, newBackoffLevel;
+  let shouldFallback, cooldownMs, newBackoffLevel, isConcurrencyLimit = false;
   if (githubResetAtMs) {
     shouldFallback = true;
     cooldownMs = githubResetAtMs - Date.now();
@@ -261,12 +261,15 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
     newBackoffLevel = 0;
   } else if (status === 429) {
     // Use classify429 for all 429 responses so rate_limit, quota_exhausted,
-    // and daily_quota get deterministic, semantically correct cooldowns
+    // daily_quota, and concurrency_limit get deterministic, semantically correct cooldowns
     // instead of generic exponential backoff.
     const classification = classify429({ status, body: errorText, provider });
     shouldFallback = true;
     cooldownMs = classification.cooldownMs;
     newBackoffLevel = backoffLevel;
+    if (classification.kind === "concurrency_limit") {
+      isConcurrencyLimit = true;
+    }
   } else {
     ({ shouldFallback, cooldownMs, newBackoffLevel } = checkFallbackError(status, errorText, backoffLevel));
   }
@@ -277,7 +280,7 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
 
   await updateProviderConnection(connectionId, {
     ...lockUpdate,
-    testStatus: "unavailable",
+    testStatus: isConcurrencyLimit ? (conn?.testStatus || "active") : "unavailable",
     lastError: reason,
     errorCode: status,
     lastErrorAt: new Date().toISOString(),
@@ -286,7 +289,11 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
 
   const lockKey = Object.keys(lockUpdate)[0];
   const connName = conn?.displayName || conn?.name || conn?.email || connectionId.slice(0, 8);
-  log.warn("AUTH", `${connName} locked ${lockKey} for ${Math.round(cooldownMs / 1000)}s [${status}]`);
+  if (isConcurrencyLimit) {
+    log.info("AUTH", `${connName} brief concurrency wait ${lockKey} for ${Math.round(cooldownMs / 1000)}s [${status}]`);
+  } else {
+    log.warn("AUTH", `${connName} locked ${lockKey} for ${Math.round(cooldownMs / 1000)}s [${status}]`);
+  }
 
   if (provider && status && reason) {
     console.error(`❌ ${provider} [${status}]: ${reason}`);

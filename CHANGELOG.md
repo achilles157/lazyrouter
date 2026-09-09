@@ -1,3 +1,15 @@
+# v1.1.0 (2026-09-09)
+
+## Features
+- **AutoClaw Integration**: Added "Import Token" modal and full connection handling on AutoClaw provider details page, supporting direct auth import and automated account configuration.
+- **AutoClaw Automation & Rewards**: Implemented rewards service for daily check-ins, newbie 100M tokens claim, and promotion claims, complete with token bucket rate limiting for upstream WAF pacing.
+- **Smart 429 Concurrency Handling**: Classified concurrency limit responses (such as B.AI error 1200) as transient in-flight collisions. Applies a lightweight 2s transient cooldown with transparent auto-retry instead of penalizing accounts with a 60-second lock or marking them unavailable.
+
+## Fixes & Stability
+- **LoopGuard Algorithm Optimization**: Bounded sequence detection window and optimized tail matching to eliminate prompt execution latency and high concurrency bottlenecks.
+- **Circuit Breaker Accuracy**: Prevented false-positive circuit breaker trips on providers during peak concurrency traffic.
+- **B.AI Free Tier Compatibility**: Preserved active status for 0-credit free models (such as GLM-5.3-Flash) without tripping negative-balance lockouts.
+
 # v0.5.59 (2026-08-29)
 
 ## Features
