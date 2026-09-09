@@ -472,6 +472,9 @@ function AutoclawAutomationPanel({ onRefresh }) {
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [autoclawConnections, setAutoclawConnections] = useState([]);
   const [refreshingId, setRefreshingId] = useState(null);
+  const [checkingIn, setCheckingIn] = useState(false);
+  const [checkinResults, setCheckinResults] = useState(null);
+  const [claimingId, setClaimingId] = useState(null);
 
   const refreshAutoclawList = useCallback(async () => {
     try {
@@ -504,6 +507,44 @@ function AutoclawAutomationPanel({ onRefresh }) {
     }
   };
 
+  const handleCheckin = async () => {
+    setCheckingIn(true);
+    setCheckinResults(null);
+    try {
+      const res = await fetch("/api/oauth/autoclaw/checkin", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) setCheckinResults(data.results || []);
+      else setCheckinResults([{ name: "Error", tasks: [], error: data.error || res.statusText }]);
+      await refreshAutoclawList();
+    } catch (e) {
+      setCheckinResults([{ name: "Error", tasks: [], error: e.message }]);
+    } finally {
+      setCheckingIn(false);
+    }
+  };
+
+  const handleClaimNewbie = async (connectionId) => {
+    setClaimingId(connectionId);
+    try {
+      const res = await fetch(`/api/oauth/autoclaw/claim?connectionId=${connectionId}&type=newbie`, { method: "POST" });
+      const data = await res.json();
+      setCheckinResults((prev) => [
+        ...(prev || []),
+        {
+          name: "Claim 100M",
+          tasks: [{ taskId: "newbie_100m", ok: res.ok, points: null, error: res.ok ? null : data.error, token: res.ok ? data.token : null }],
+        },
+      ]);
+    } catch (e) {
+      setCheckinResults((prev) => [
+        ...(prev || []),
+        { name: "Claim 100M", tasks: [{ taskId: "newbie_100m", ok: false, error: e.message }] },
+      ]);
+    } finally {
+      setClaimingId(null);
+    }
+  };
+
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -523,6 +564,15 @@ function AutoclawAutomationPanel({ onRefresh }) {
             icon="token"
             title="Import Account"
             subtitle="Paste access_token + refresh_token from autoclaw.z.ai (Google OAuth interception)."
+          />
+        </button>
+        <button type="button" onClick={handleCheckin} disabled={checkingIn} className="text-left">
+          <Card
+            hover
+            padding="md"
+            icon="event_available"
+            title={checkingIn ? "Checking in…" : "Daily Check-in"}
+            subtitle="Claim daily tasks (signin, inspiration, lobsters) for all accounts."
           />
         </button>
       </div>
@@ -560,9 +610,51 @@ function AutoclawAutomationPanel({ onRefresh }) {
                 >
                   Refresh
                 </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  loading={claimingId === c.id}
+                  onClick={() => handleClaimNewbie(c.id)}
+                  title="Claim the 100M-token newbie guide reward"
+                >
+                  Claim 100M
+                </Button>
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {checkinResults && checkinResults.length > 0 && (
+        <div className="mt-4 flex flex-col gap-2 rounded-lg border border-border bg-surface p-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-text-main">Rewards Result</h3>
+            <button
+              onClick={() => setCheckinResults(null)}
+              className="p-1 rounded text-text-muted hover:text-primary hover:bg-black/5 dark:hover:bg-white/5"
+              title="Dismiss"
+            >
+              <span className="material-symbols-outlined text-[16px]">close</span>
+            </button>
+          </div>
+          {checkinResults.map((r, i) => (
+            <div key={i} className="text-xs">
+              <div className="font-medium text-text-main">
+                {r.name}
+                {r.balanceBefore != null && r.balanceAfter != null && (
+                  <span className="text-text-muted font-normal"> · {r.balanceBefore} → {r.balanceAfter} pts</span>
+                )}
+              </div>
+              {(r.tasks || []).map((t, j) => (
+                <div key={j} className={t.ok ? "text-success" : "text-red-500"}>
+                  {t.ok ? "✓" : "✗"} {t.taskId}
+                  {t.alreadyCompleted ? " (already done)" : t.ok && t.points ? ` +${t.points} pts` : ""}
+                  {t.error ? ` — ${t.error}` : ""}
+                </div>
+              ))}
+              {r.error && <div className="text-red-500">{r.error}</div>}
+            </div>
+          ))}
         </div>
       )}
 
