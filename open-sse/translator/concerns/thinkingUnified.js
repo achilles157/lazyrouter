@@ -278,8 +278,10 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels) {
         // GLM-5.3 only accepts exactly low|high|max (anything else errors); GLM-5.2 accepts
         // a wider set but z.ai maps low/medium->high and xhigh->max server-side anyway, so
         // this 3-value mapping matches both.
-        body.reasoning_effort = (zaiLvl === "low" || zaiLvl === "minimal") ? "low"
-          : (zaiLvl === "high" || zaiLvl === "medium" || zaiLvl === "auto" || !zaiLvl) ? "high"
+        // For auto/unspecified, default to low so queries (especially flash models) don't
+        // stall or timeout on upstream inference queues.
+        body.reasoning_effort = (zaiLvl === "low" || zaiLvl === "minimal" || zaiLvl === "auto" || !zaiLvl) ? "low"
+          : (zaiLvl === "high" || zaiLvl === "medium") ? "high"
           : "max";
       }
       break;

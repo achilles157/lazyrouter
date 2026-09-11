@@ -133,16 +133,16 @@ describe("applyThinking per provider format", () => {
     ["low", "low"],
     ["medium", "high"],
     ["minimal", "low"],
-    ["auto", "high"],
+    ["auto", "low"],
   ])("GLM-5.3 %s → reasoning_effort=%s (low|high|max only, per z.ai docs)", (input, expected) => {
     const out = apply("openai", "glm-5.3", { reasoning_effort: input }, "glm-cn");
     expect(out.thinking).toEqual({ type: "enabled" });
     expect(out.reasoning_effort).toBe(expected);
   });
-  it("GLM-5.3-flash gets reasoning_effort and maps adaptive thinking to high", () => {
+  it("GLM-5.3-flash gets reasoning_effort and maps adaptive thinking to low", () => {
     const out = apply("openai", "glm-5.3-flash", { thinking: { type: "adaptive" } });
     expect(out.thinking).toEqual({ type: "enabled" });
-    expect(out.reasoning_effort).toBe("high");
+    expect(out.reasoning_effort).toBe("low");
   });
   it("GLM-5.2 also gets reasoning_effort (supported from 5.2 onward)", () => {
     const out = apply("openai", "glm-5.2", { reasoning_effort: "low" }, "glm-cn");
