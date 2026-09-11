@@ -279,7 +279,7 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels) {
         // a wider set but z.ai maps low/medium->high and xhigh->max server-side anyway, so
         // this 3-value mapping matches both.
         body.reasoning_effort = (zaiLvl === "low" || zaiLvl === "minimal") ? "low"
-          : (zaiLvl === "high" || zaiLvl === "medium") ? "high"
+          : (zaiLvl === "high" || zaiLvl === "medium" || zaiLvl === "auto" || !zaiLvl) ? "high"
           : "max";
       }
       break;
