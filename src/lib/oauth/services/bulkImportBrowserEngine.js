@@ -22,12 +22,15 @@ export function normalizeBulkImportEngine(value) {
   return SUPPORTED_ENGINES.has(lower) ? lower : DEFAULT_BULK_IMPORT_ENGINE;
 }
 
+import { normalizeSingleProxyUrl } from "../../network/proxyUrl.js";
+
 export function buildBrowserProxyOption(proxyUrl) {
   const clean = String(proxyUrl || "").trim();
   if (!clean) return null;
+  const normalized = normalizeSingleProxyUrl(clean) || clean;
   let parsed;
   try {
-    parsed = new URL(clean);
+    parsed = new URL(normalized);
   } catch {
     return { server: clean };
   }
@@ -154,7 +157,10 @@ async function launchRealChrome({ proxyUrl, headless = false, args = [] } = {}) 
   ];
 
   if (headless) chromeArgs.push("--headless=new");
-  if (proxyUrl) chromeArgs.push(`--proxy-server=${proxyUrl}`);
+  const proxyOpt = buildBrowserProxyOption(proxyUrl);
+  if (proxyOpt?.server) {
+    chromeArgs.push(`--proxy-server=${proxyOpt.server}`);
+  }
 
   const proc = spawn(chromeBin, chromeArgs, { stdio: "ignore", detached: false });
 
@@ -184,6 +190,13 @@ async function launchRealChrome({ proxyUrl, headless = false, args = [] } = {}) 
   }
 
   const browser = await runtimePlaywright.chromium.connectOverCDP(`http://127.0.0.1:${port}`);
+  browser.__ninerouterProxyUrl = proxyUrl || null;
+  if (proxyOpt?.username && proxyOpt?.password) {
+    browser.__proxyCredentials = {
+      username: proxyOpt.username,
+      password: proxyOpt.password,
+    };
+  }
 
   // Kill Chrome when Playwright disconnects
   browser.on("disconnected", () => {
@@ -331,3 +344,31 @@ export async function launchBulkImportBrowser({ engine = DEFAULT_BULK_IMPORT_ENG
 export function makeBrowserLauncher({ engine, proxyUrl, headless, args } = {}) {
   return () => launchBulkImportBrowser({ engine, proxyUrl, headless, args });
 }
+
+export async function attachCdpProxyAuth(page, credentials) {
+  if (!page || !credentials?.username || !credentials?.password) return;
+  try {
+    const context = page.context?.() || null;
+    if (!context || typeof context.newCDPSession !== "function") return;
+    const cdpSession = await context.newCDPSession(page);
+    await cdpSession.send("Fetch.enable", { handleAuthRequests: true });
+    cdpSession.on("Fetch.authRequired", async (event) => {
+      await cdpSession.send("Fetch.continueWithAuth", {
+        requestId: event.requestId,
+        authChallengeResponse: {
+          response: "ProvideCredentials",
+          username: credentials.username,
+          password: credentials.password,
+        },
+      }).catch(() => null);
+    });
+    cdpSession.on("Fetch.requestPaused", async (event) => {
+      await cdpSession.send("Fetch.continueRequest", {
+        requestId: event.requestId,
+      }).catch(() => null);
+    });
+  } catch {
+    // Best-effort; ignore if browser doesn't support CDP Fetch domain
+  }
+}
+

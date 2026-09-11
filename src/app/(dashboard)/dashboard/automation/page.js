@@ -532,9 +532,19 @@ function AutoclawAutomationPanel({ onRefresh }) {
         ...(prev || []),
         {
           name: "Claim 100M",
-          tasks: [{ taskId: "newbie_100m", ok: res.ok, points: null, error: res.ok ? null : data.error, token: res.ok ? data.token : null }],
+          balanceBefore: data.balanceBefore,
+          balanceAfter: data.balanceAfter,
+          tasks: [{
+            taskId: "newbie_100m",
+            ok: res.ok,
+            points: data.balanceAfter != null ? data.balanceAfter : null,
+            error: res.ok ? null : data.error,
+            token: res.ok ? data.token : null,
+          }],
         },
       ]);
+      await refreshAutoclawList();
+      onRefresh?.();
     } catch (e) {
       setCheckinResults((prev) => [
         ...(prev || []),

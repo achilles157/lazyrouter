@@ -453,7 +453,7 @@ export default function BulkAccountAutomationModal({
                     value={proxyUrl}
                     onChange={(event) => setProxyUrl(event.target.value)}
                     disabled={Boolean(proxyPoolId)}
-                    placeholder="http://user:pass@host:port"
+                    placeholder="http://user:pass@host:port or host:port:user:pass"
                   />
                 </div>
               </div>

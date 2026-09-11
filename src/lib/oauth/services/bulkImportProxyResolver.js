@@ -4,20 +4,21 @@ import { getSettings } from "../../db/repos/settingsRepo.js";
 const RELAY_POOL_TYPES = new Set(["vercel", "cloudflare", "deno"]);
 const VALID_PROXY_PROTOCOLS = new Set(["http:", "https:", "socks4:", "socks5:"]);
 
-export function splitBulkImportProxyUrls(value) {
-  return String(value || "")
-    .split(/[\s,;]+(?=(?:https?:\/\/|socks[45]:\/\/))/i)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
+import {
+  normalizeSingleProxyUrl,
+  splitProxyUrls,
+} from "../../network/proxyUrl.js";
+
+export { normalizeSingleProxyUrl, splitProxyUrls as splitBulkImportProxyUrls };
 
 function validateProxyUrls(proxyUrls) {
-  for (const proxyUrl of proxyUrls) {
+  for (const raw of proxyUrls) {
+    const proxyUrl = normalizeSingleProxyUrl(raw) || raw;
     let parsed;
     try {
       parsed = new URL(proxyUrl);
     } catch {
-      return "proxyUrl must be a valid URL";
+      return `Proxy "${raw}" must be a valid URL or host:port:user:pass`;
     }
     if (!VALID_PROXY_PROTOCOLS.has(parsed.protocol)) {
       return "proxyUrl must start with http://, https://, socks4://, or socks5://";
@@ -28,7 +29,7 @@ function validateProxyUrls(proxyUrls) {
 }
 
 function buildResolvedProxy(proxyUrls, source) {
-  const urls = [...new Set(proxyUrls)];
+  const urls = [...new Set((proxyUrls || []).map((p) => normalizeSingleProxyUrl(p) || p).filter(Boolean))];
   return {
     proxyUrl: urls[0] || null,
     proxyUrls: urls,

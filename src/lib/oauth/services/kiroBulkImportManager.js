@@ -288,13 +288,27 @@ async function defaultSocialExchange(args) {
   return exchangeAndSaveKiroSocialConnection(args);
 }
 
+import { attachCdpProxyAuth } from "./bulkImportBrowserEngine.js";
+export { attachCdpProxyAuth };
+
 export async function createFreshContext(browser, { locale = "en-US" } = {}) {
   const context = await browser.newContext({
     userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     viewport: { width: 1280, height: 800 },
     locale,
   });
+  const credentials = browser?.__proxyCredentials;
+  if (credentials?.username && credentials?.password) {
+    if (typeof context.on === "function") {
+      context.on("page", (newPage) => {
+        void attachCdpProxyAuth(newPage, credentials);
+      });
+    }
+  }
   const page = await context.newPage();
+  if (credentials?.username && credentials?.password) {
+    await attachCdpProxyAuth(page, credentials);
+  }
   return { context, page };
 }
 

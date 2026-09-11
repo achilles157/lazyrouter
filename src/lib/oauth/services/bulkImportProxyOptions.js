@@ -1,11 +1,7 @@
+import { splitProxyUrls } from "../../network/proxyUrl.js";
+
 const RELAY_POOL_TYPES = new Set(["vercel", "cloudflare", "deno"]);
 
-function splitProxyUrls(value) {
-  return String(value || "")
-    .split(/[\s,;]+(?=(?:https?:\/\/|socks[45]:\/\/))/i)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
 
 export function getBrowserProxyPools(payload = {}) {
   const pools = payload.proxyPools

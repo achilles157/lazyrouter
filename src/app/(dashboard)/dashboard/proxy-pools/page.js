@@ -39,6 +39,8 @@ export default function ProxyPoolsPage() {
   const [editingProxyPool, setEditingProxyPool] = useState(null);
   const [formData, setFormData] = useState(normalizeFormData());
   const [batchImportText, setBatchImportText] = useState("");
+  const [batchImportMode, setBatchImportMode] = useState("single");
+  const [batchPoolName, setBatchPoolName] = useState("");
   const [vercelForm, setVercelForm] = useState({ vercelToken: "", projectName: "vercel-relay" });
   const [cloudflareForm, setCloudflareForm] = useState({ accountId: "", apiToken: "", projectName: "cloudflare-relay" });
   const [denoForm, setDenoForm] = useState({ denoToken: "", orgDomain: "", projectName: "" });
@@ -106,9 +108,20 @@ export default function ProxyPoolsPage() {
   };
 
   const handleSave = async () => {
+    const rawLines = formData.proxyUrl.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const normalizedLines = rawLines.map((line) => {
+      try {
+        const parsed = parseProxyLine(line);
+        return parsed ? parsed.proxyUrl : line;
+      } catch {
+        return line;
+      }
+    });
+    const effectiveProxyUrl = normalizedLines.join("\n");
+
     const payload = {
       name: formData.name.trim(),
-      proxyUrl: formData.proxyUrl.trim(),
+      proxyUrl: effectiveProxyUrl,
       noProxy: formData.noProxy.trim(),
       isActive: formData.isActive === true,
       strictProxy: formData.strictProxy === true,
@@ -334,6 +347,8 @@ export default function ProxyPoolsPage() {
 
   const openBatchImportModal = () => {
     setBatchImportText("");
+    setBatchPoolName("");
+    setBatchImportMode("single");
     setShowBatchImportModal(true);
   };
 
@@ -513,6 +528,31 @@ export default function ProxyPoolsPage() {
 
     setImporting(true);
     try {
+      if (batchImportMode === "single") {
+        const poolName = batchPoolName.trim() || `Proxy Pool (${parsedEntries.length} proxies)`;
+        const combinedUrls = parsedEntries.map((e) => e.proxyUrl).join("\n");
+        const res = await fetch("/api/proxy-pools", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: poolName,
+            proxyUrl: combinedUrls,
+            noProxy: "",
+            isActive: true,
+          }),
+        });
+
+        if (res.ok) {
+          await fetchProxyPools();
+          setShowBatchImportModal(false);
+          notify.success(`Created rotating proxy pool "${poolName}" with ${parsedEntries.length} proxies`);
+          return;
+        }
+
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to create proxy pool");
+      }
+
       const existingKeys = new Set(
         proxyPools.map((pool) => `${(pool.proxyUrl || "").trim()}|||${(pool.noProxy || "").trim()}`)
       );
@@ -552,7 +592,7 @@ export default function ProxyPoolsPage() {
       notify.success(`Batch import completed: Created ${created}, Skipped ${skipped}, Failed ${failed}`);
     } catch (error) {
       console.log("Error batch importing proxies:", error);
-      notify.error("Batch import failed");
+      notify.error(error.message || "Batch import failed");
     } finally {
       setImporting(false);
     }
@@ -784,16 +824,55 @@ export default function ProxyPoolsPage() {
         onClose={closeBatchImportModal}
       >
         <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-text-main block">Import Destination</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setBatchImportMode("single")}
+                className={`p-2.5 rounded-lg border text-left text-xs transition-all ${
+                  batchImportMode === "single"
+                    ? "border-primary bg-primary/10 text-primary font-medium"
+                    : "border-border text-text-muted hover:border-text-muted"
+                }`}
+              >
+                <div className="font-semibold text-text-main mb-0.5">Single Rotating Pool</div>
+                <div>All proxies in 1 pool (ideal for Automation round-robin)</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setBatchImportMode("multiple")}
+                className={`p-2.5 rounded-lg border text-left text-xs transition-all ${
+                  batchImportMode === "multiple"
+                    ? "border-primary bg-primary/10 text-primary font-medium"
+                    : "border-border text-text-muted hover:border-text-muted"
+                }`}
+              >
+                <div className="font-semibold text-text-main mb-0.5">Individual Pools</div>
+                <div>1 separate pool per proxy</div>
+              </button>
+            </div>
+          </div>
+
+          {batchImportMode === "single" && (
+            <Input
+              label="Pool Name (optional)"
+              value={batchPoolName}
+              onChange={(e) => setBatchPoolName(e.target.value)}
+              placeholder="e.g. Rotating Datacenter Proxies"
+            />
+          )}
+
           <div>
             <label className="text-sm font-medium text-text-main mb-1 block">Paste Proxy List (One per line)</label>
             <textarea
               value={batchImportText}
               onChange={(e) => setBatchImportText(e.target.value)}
-              placeholder={"http://user:pass@127.0.0.1:7897\n127.0.0.1:7897:user:pass"}
-              className="w-full min-h-[180px] py-2 px-3 text-sm text-text-main bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-md focus:ring-1 focus:ring-primary/30 focus:border-primary/50 focus:outline-none transition-all"
+              placeholder={"http://user:pass@127.0.0.1:7897\n127.0.0.1:7897:user:pass\nproxy.host.com:10000:user:pass"}
+              className="w-full min-h-[180px] py-2 px-3 text-sm text-text-main bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-md focus:ring-1 focus:ring-primary/30 focus:border-primary/50 focus:outline-none font-mono transition-all"
             />
             <p className="text-xs text-text-muted mt-1">
-              Supported formats: protocol://user:pass@host:port, host:port:user:pass
+              Supported formats: protocol://user:pass@host:port, host:port:user:pass, or host:port
             </p>
           </div>
 
@@ -996,12 +1075,19 @@ export default function ProxyPoolsPage() {
             onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
             placeholder="Office Proxy"
           />
-          <Input
-            label="Proxy URL"
-            value={formData.proxyUrl}
-            onChange={(e) => setFormData((prev) => ({ ...prev, proxyUrl: e.target.value }))}
-            placeholder="http://127.0.0.1:7897"
-          />
+          <div>
+            <label className="text-sm font-medium text-text-main mb-1 block">Proxy URL(s)</label>
+            <textarea
+              value={formData.proxyUrl}
+              onChange={(e) => setFormData((prev) => ({ ...prev, proxyUrl: e.target.value }))}
+              placeholder={"http://user:pass@127.0.0.1:7897\nhost:port:user:pass\n(one per line for rotation)"}
+              rows={3}
+              className="w-full py-2 px-3 text-sm text-text-main bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-md focus:ring-1 focus:ring-primary/30 focus:border-primary/50 focus:outline-none font-mono transition-all"
+            />
+            <p className="text-xs text-text-muted mt-1">
+              Supports standard URL, host:port:user:pass, or multiple proxies (one per line) for round-robin rotation.
+            </p>
+          </div>
           <Input
             label="No Proxy"
             value={formData.noProxy}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getProviderConnectionById } from "@/lib/localDb";
+import { getProviderConnectionById, updateProviderConnection } from "@/lib/localDb";
 import { claimAutoclawNewbieToken, claimAutoclawPromotionReward } from "open-sse/services/autoclawRewards.js";
+import { getAutoclawBalance } from "open-sse/services/usage/autoclaw.js";
 
 export const dynamic = "force-dynamic";
 
@@ -28,8 +29,21 @@ export async function POST(request) {
     }
 
     if (type === "newbie") {
+      const balanceBefore = await getAutoclawBalance(conn.accessToken, conn.providerSpecificData)
+        .then((r) => r.balance).catch(() => null);
       const token = await claimAutoclawNewbieToken(conn.accessToken);
-      return NextResponse.json({ success: true, type, token });
+      const balanceAfter = await getAutoclawBalance(conn.accessToken, conn.providerSpecificData)
+        .then((r) => r.balance).catch(() => null);
+
+      if (balanceAfter != null) {
+        await updateProviderConnection(conn.id, {
+          providerSpecificData: {
+            ...(conn.providerSpecificData || {}),
+            balance: balanceAfter,
+          },
+        });
+      }
+      return NextResponse.json({ success: true, type, token, balanceBefore, balanceAfter });
     }
 
     const reward = await claimAutoclawPromotionReward(

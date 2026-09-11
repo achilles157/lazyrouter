@@ -25,8 +25,11 @@ function normalizeString(value) {
   return String(value).trim();
 }
 
+import { normalizeSingleProxyUrl, splitProxyUrls } from "./proxyUrl.js";
+
 export async function testProxyUrl({ proxyUrl, testUrl, timeoutMs } = {}) {
-  const normalizedProxyUrl = normalizeString(proxyUrl);
+  const candidateUrls = splitProxyUrls(proxyUrl);
+  const normalizedProxyUrl = candidateUrls[0] || normalizeSingleProxyUrl(proxyUrl) || normalizeString(proxyUrl);
   if (!normalizedProxyUrl) {
     return { ok: false, status: 400, error: "proxyUrl is required" };
   }
