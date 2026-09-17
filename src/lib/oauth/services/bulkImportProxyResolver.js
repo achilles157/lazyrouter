@@ -9,7 +9,9 @@ import {
   splitProxyUrls,
 } from "../../network/proxyUrl.js";
 
-export { normalizeSingleProxyUrl, splitProxyUrls as splitBulkImportProxyUrls };
+const splitBulkImportProxyUrls = splitProxyUrls;
+
+export { normalizeSingleProxyUrl, splitBulkImportProxyUrls, splitProxyUrls };
 
 function validateProxyUrls(proxyUrls) {
   for (const raw of proxyUrls) {

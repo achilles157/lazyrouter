@@ -86,6 +86,28 @@ export async function getFreebuffUsage(accessToken, providerSpecificData, proxyO
     }
 
     const quotas = {};
+    // Freebucks credit economy (CLI 0.0.174+): a daily free balance spent by
+    // each session claim at the model's listed price. Surface it as a pseudo
+    // quota entry so the dashboard shows remaining daily balance alongside
+    // the per-model session rows.
+    const fb = data.freebucks;
+    if (fb && typeof fb === "object") {
+      const daily = fb.daily || {};
+      const wallet = fb.wallet || {};
+      const total = Number(daily.limit);
+      const spent = Number(daily.spent);
+      const walletTotal = Number(wallet.balance) + Number(wallet.monthlyBonus || 0);
+      quotas["freebucks"] = {
+        used: Number.isFinite(spent) ? spent : 0,
+        total: Number.isFinite(total) ? total : 0,
+        resetAt: daily.resetAt || null,
+        unlimited: false,
+        recurring: true,
+        displayName: "Freebucks (daily)",
+        priceList: fb.prices || {},
+        ...(Number.isFinite(walletTotal) && walletTotal > 0 ? { wallet: walletTotal } : {}),
+      };
+    }
     for (const [model, rl] of Object.entries(rateLimits)) {
       if (!rl || typeof rl !== "object") continue;
       const used = Number(rl.recentCount);

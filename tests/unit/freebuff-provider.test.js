@@ -10,24 +10,30 @@ const { injectFreebuffMarker } = execTest;
 
 
 describe("freebuff provider (ported from VansRouter)", () => {
-  it("registry exposes freebuff with 5 free models", () => {
+  it("registry exposes freebuff with the Freebucks free model catalog", () => {
     expect(registry.id).toBe("freebuff");
     expect(registry.category).toBe("free");
     expect(registry.hasOAuth).toBe(true);
-    expect(registry.models.length).toBe(5);
+    expect(registry.models.length).toBe(12);
     expect(registry.models.map((m) => m.id)).toContain("deepseek/deepseek-v4-flash");
+    expect(registry.models.map((m) => m.id)).toContain("z-ai/glm-5.3-flash");
   });
 
   it("PROVIDERS picks up transport + oauth from registry", () => {
     expect(PROVIDERS.freebuff?.baseUrl).toBe("https://www.codebuff.com/api/v1/chat/completions");
     expect(PROVIDER_OAUTH.freebuff?.baseUrl).toBe("https://freebuff.com");
-    expect((PROVIDER_MODELS.fb || PROVIDER_MODELS.freebuff || []).length).toBe(5);
+    expect((PROVIDER_MODELS.fb || PROVIDER_MODELS.freebuff || []).length).toBe(12);
   });
 
-  it("root agent id maps per model with base2-free fallback", () => {
+  it("root agent id maps per model (Freebucks CLI 0.0.174 mapping)", () => {
     expect(execTest.rootAgentIdForModel("deepseek/deepseek-v4-flash")).toBe("base3-free-deepseek-flash");
     expect(execTest.rootAgentIdForModel("openai/gpt-5.6-luna")).toBe("base3-free-luna");
-    expect(execTest.rootAgentIdForModel("unknown/model")).toBe("base2-free");
+    expect(execTest.rootAgentIdForModel("z-ai/glm-5.3-flash")).toBe("base3-free-glm-5-3-flash");
+    expect(execTest.rootAgentIdForModel("google/gemini-3.8-flash")).toBe("base3-free-gemini-3-8-flash");
+  });
+
+  it("root agent id fails fast for unmapped models (no base2-free fallback)", () => {
+    expect(() => execTest.rootAgentIdForModel("unknown/model")).toThrow(/no free-tier agent/);
   });
 
   it("injectFreebuffMarker prepends canonical opening (idempotent)", () => {
@@ -42,9 +48,11 @@ describe("freebuff provider (ported from VansRouter)", () => {
   it("executor transformRequest sets cost_mode free + provider fallbacks off", () => {
     const executor = new FreebuffExecutor();
     const body = { model: "m", messages: [{ role: "user", content: "hi" }], reasoning_effort: "low" };
-    const out = executor.transformRequest("m", body, true, {});
+    const out = executor.transformRequest("z-ai/glm-5.3-flash", body, true, {});
     expect(out.codebuff_metadata.cost_mode).toBe("free");
     expect(out.provider).toEqual({ allow_fallbacks: false });
     expect(out.reasoning_effort).toBeUndefined();
+    // body.model is pinned to the normalized route id
+    expect(out.model).toBe("z-ai/glm-5.3-flash");
   });
 });

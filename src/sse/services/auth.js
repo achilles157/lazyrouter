@@ -5,10 +5,29 @@ import { classify429 } from "open-sse/utils/classify429.js";
 import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
 import { resolveProviderId, getProviderAlias, FREE_PROVIDERS } from "@/shared/constants/providers.js";
 import { getAntigravityQuotaCache } from "./antigravityQuota.js";
+import { loadPoolFitness, fitPoolIds } from "open-sse/services/proxyPoolFitness.js";
 import * as log from "../utils/logger.js";
 
 // Mutex to prevent race conditions during account selection
 let selectionMutex = Promise.resolve();
+
+/**
+ * Freebuff strict per-model account assignment: when enabled for the provider,
+ * only connections whose providerSpecificData.assignedModel (or legacy
+ * freebuffModel) matches the requested model are eligible. An explicit null
+ * assignment clears a legacy value; unassigned accounts are excluded.
+ */
+export function filterConnectionsForModel(providerId, connections, model, settings = {}) {
+  const override = (settings.providerStrategies || {})[providerId] || {};
+  if (providerId !== "freebuff" || override.strictModelAssignment !== true || !model) return connections;
+  return connections.filter((connection) => {
+    const data = connection.providerSpecificData || {};
+    const assignedModel = Object.prototype.hasOwnProperty.call(data, "assignedModel")
+      ? data.assignedModel
+      : (providerId === "freebuff" ? data.freebuffModel : null);
+    return assignedModel === model;
+  });
+}
 
 const GITHUB_MONTHLY_USAGE_LIMIT = "you've reached your additional usage limit for your plan";
 
@@ -52,7 +71,14 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       if (strategy !== "none") {
         const allPools = await getProxyPools({ isActive: true });
         const poolIds = allPools.filter(p => p.proxyUrl).map(p => p.id);
-        pickedId = pickProxyPoolId(poolIds, strategy, providerId);
+        // Proxy-pool rotation must skip pools that are cooling down for this
+        // provider::model scope (recorded by executors via markPoolUnfit after
+        // a limited-IP / rate-limit rejection). If every pool is cooling down
+        // we still return one — better a known-bad pool than no egress at all.
+        const scope = `${providerId}::${model || ""}`;
+        await Promise.all(poolIds.map((poolId) => loadPoolFitness(poolId)));
+        const fitIds = fitPoolIds(poolIds, scope);
+        pickedId = pickProxyPoolId(fitIds.length ? fitIds : poolIds, strategy, providerId);
       }
       const resolvedProxy = await resolveConnectionProxyConfig({ proxyPoolId: pickedId || "" });
       return {
@@ -70,7 +96,11 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       };
     }
 
-    const connections = await getProviderConnections({ provider: providerId, isActive: true });
+    let connections = await getProviderConnections({ provider: providerId, isActive: true });
+    // Freebuff strict model assignment: only accounts explicitly assigned to
+    // the requested model are eligible (one upstream session per account).
+    const settings = await getSettings();
+    connections = filterConnectionsForModel(providerId, connections, model, settings);
     log.debug("AUTH", `${provider} | total connections: ${connections.length}, excludeIds: ${excludeSet.size > 0 ? [...excludeSet].join(",") : "none"}, model: ${model || "any"}`);
 
     if (connections.length === 0) {
@@ -134,8 +164,9 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       return null;
     }
 
-    const settings = await getSettings();
-    // Per-provider strategy overrides global setting
+    // Per-provider strategy overrides global setting (fetched above for the
+    // freebuff strict-model-assignment filter)
+
     const providerOverride = (settings.providerStrategies || {})[providerId] || {};
     const strategy = providerOverride.fallbackStrategy || settings.fallbackStrategy || "fill-first";
 
@@ -193,7 +224,15 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       connection = availableConnections[0];
     }
 
-    const resolvedProxy = await resolveConnectionProxyConfig(connection.providerSpecificData || {});
+    // Freebuff must always resolve through a proxy pool scoped to the
+    // provider+model (free tier is IP-gated), even when the account itself
+    // has no explicit pool ids — pool fitness picks the healthiest pool.
+    const psdForProxy = providerId === "freebuff"
+      ? { ...(connection.providerSpecificData || {}), proxyPoolScope: `${providerId}::${model || ""}` }
+      : connection.providerSpecificData?.proxyPoolIds?.length
+        ? { ...connection.providerSpecificData, proxyPoolScope: `${providerId}::${model || ""}` }
+        : connection.providerSpecificData;
+    const resolvedProxy = await resolveConnectionProxyConfig(psdForProxy || {});
 
     return {
       authType: connection.authType,

@@ -369,6 +369,9 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     connectionProxyUrl: credentials?.providerSpecificData?.connectionProxyUrl || "",
     connectionNoProxy: credentials?.providerSpecificData?.connectionNoProxy || "",
     vercelRelayUrl: credentials?.providerSpecificData?.vercelRelayUrl || "",
+    // Carried so executors can record pool fitness (markPoolUnfit) and report
+    // pool-scoped failures back to the pool selector.
+    proxyPoolId: credentials?.providerSpecificData?.connectionProxyPoolId || null,
   };
 
   if (proxyOptions.vercelRelayUrl) {

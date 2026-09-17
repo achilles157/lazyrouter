@@ -512,6 +512,28 @@ export function parseQuotaData(provider, data) {
         }
         break;
 
+      case "freebuff":
+        // Freebucks economy (CLI 0.0.174+): the usage service emits one pseudo
+        // row for the daily credit balance (key "freebucks") plus one row per
+        // free model. Rows carry a displayName from the CLI model labels; keep
+        // modelKey so ordering still follows PROVIDER_MODELS and the quota
+        // visibility toggles stay stable when a label changes.
+        if (data.quotas) {
+          Object.entries(data.quotas).forEach(([modelKey, quota]) => {
+            normalizedQuotas.push({
+              name: quota.displayName || modelKey,
+              modelKey,
+              used: quota.used || 0,
+              total: quota.total || 0,
+              resetAt: quota.resetAt || null,
+              recurring: quota.recurring !== false,
+              ...(quota.wallet !== undefined ? { wallet: quota.wallet } : {}),
+              ...(quota.priceList ? { priceList: quota.priceList } : {}),
+            });
+          });
+        }
+        break;
+
       case "kimi":
         // Weekly / Ratelimit from /v1/usages. Prefer remainingPercentage only.
         if (data.quotas) {

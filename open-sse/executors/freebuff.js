@@ -91,13 +91,30 @@ function injectEndTurnTool(body) {
   return { ...body, tools: [...tools, END_TURN_TOOL] };
 }
 
-// Freebuff root agent id per model (mirrors the CLI's base3 free agents).
+// Legacy catalog ids (pre-Freebucks) → current upstream route ids.
+const FREEBUFF_MODEL_ALIASES = {
+  "glm/glm-5.3-flash": "z-ai/glm-5.3-flash",
+  "glm/glm-5.2": "z-ai/glm-5.2",
+};
+
+// Freebuff root agent id per model (mirrors the CLI's base3 free agents,
+// re-extracted from freebuff CLI 0.0.174 for the Freebucks credit system).
 const FREE_ROOT_AGENT_BY_MODEL = {
   "deepseek/deepseek-v4-flash": "base3-free-deepseek-flash",
   "deepseek/deepseek-v4-pro": "base3-free-deepseek",
   "mimo/mimo-v2.5": "base3-free-mimo",
   "minimax/minimax-m3": "base3-free-minimax-m3",
   "openai/gpt-5.6-luna": "base3-free-luna",
+  "openai/gpt-5.6-luna-es": "base3-free-luna-es",
+  "z-ai/glm-5.2": "base3-free-glm",
+  "z-ai/glm-5.3-flash": "base3-free-glm-5-3-flash",
+  "crof/kimi-k3-eco": "base3-free-kimi-k3-eco",
+  "upstage/solar-pro4": "base3-free-solar-pro4",
+  "google/gemini-3.8-flash": "base3-free-gemini-3-8-flash",
+  "meta/muse-spark-1.2-contributor": "base3-free-muse-spark",
+  "meta/muse-spark-1.3-contributor": "base3-free-muse-spark-1-3",
+  "anthropic/claude-fable-5": "base3-free-fable",
+  "stealth/ox-alpha": "base3-free-ox-alpha",
 };
 
 // Per-token+model session cache (in-memory; keyed so multi-account setups
@@ -218,7 +235,18 @@ function sessionCacheKey(token, model) {
 }
 
 function rootAgentIdForModel(model) {
-  return FREE_ROOT_AGENT_BY_MODEL[model] || "base2-free";
+  const agentId = FREE_ROOT_AGENT_BY_MODEL[model];
+  if (agentId) return agentId;
+  // Under Freebucks an unmapped model silently re-routes upstream to the
+  // default deepseek agent (price 40 Freebucks — more than the whole 25/day
+  // free balance) and fails with a cryptic 429 freebucksShortfall. Fail fast
+  // with the supported list instead of burning credits by accident.
+  const supported = Object.keys(FREE_ROOT_AGENT_BY_MODEL)
+    .sort()
+    .join(", ");
+  throw new Error(
+    `Freebuff has no free-tier agent for "${model}". Supported free models: ${supported}`,
+  );
 }
 
 // Retry transient network errors (ECONNRESET, TLS reset, …) on the session/
@@ -252,6 +280,9 @@ async function requestSession(token, model, proxyOptions) {
       Authorization: `Bearer ${token}`,
       "User-Agent": "codebuff-cli/0.0.138",
       "x-freebuff-model": model,
+      // CLI parity: the client always declares its wallet spend limit on claim
+      // (0 = never dip into the paid wallet to cover a Freebucks shortfall).
+      "x-freebuff-wallet-spend-limit": "0",
     },
   }, proxyOptions);
 
@@ -264,6 +295,17 @@ async function requestSession(token, model, proxyOptions) {
     throw err;
   }
   if (!response.ok) {
+    // Freebucks shortfall (429): balance < model price. Report it as a credit
+    // problem, not a generic rate limit, so the user knows what to do.
+    const shortfall = data?.freebucksShortfall;
+    if (shortfall && typeof shortfall.price === "number" && typeof shortfall.balance === "number") {
+      const resetAt = data?.resetAt ? ` — resets ${new Date(data.resetAt).toLocaleString()}` : "";
+      const err = new Error(
+        `Freebucks balance too low for ${data?.model || model}: costs ${shortfall.price}, balance ${shortfall.balance}${resetAt}`,
+      );
+      err.status = response.status;
+      throw err;
+    }
     const err = new Error(`Freebuff session request failed: ${response.status} ${JSON.stringify(data).slice(0, 200)}`);
     err.status = response.status;
     throw err;
@@ -446,6 +488,9 @@ export class FreebuffExecutor extends BaseExecutor {
     // Top-level wire shape — see header comment. `run_id` and
     // `freebuff_instance_id` are attached by execute() (they need the async
     // run/session registration), so this only sets the static parts.
+    // The upstream validates body.model against the free agent mapping, so it
+    // must be the normalized route id (execute() already aliased it).
+    body.model = model;
     body.codebuff_metadata = {
       client_id:
         credentials?.providerSpecificData?.fingerprintId ||
@@ -463,11 +508,15 @@ export class FreebuffExecutor extends BaseExecutor {
     return injectEndTurnTool(injectFreebuffMarker(body));
   }
 
-  async execute({ model, body, stream, credentials, signal, log, proxyOptions = null }) {
+  async execute({ model: rawModel, body, stream, credentials, signal, log, proxyOptions = null }) {
     const token = credentials?.accessToken;
     if (!token) {
       throw new Error("Freebuff requires a connected Freebuff login (no access token found)");
     }
+    // Legacy model ids from the pre-Freebucks catalog still arrive as
+    // glm/glm-5.3-flash etc. — normalize to the upstream route ids before
+    // anything (session claim, agent run, DB locks) keys off the model.
+    const model = FREEBUFF_MODEL_ALIASES[rawModel] || rawModel;
 
     // Fail fast while a known-dead (account,model) / (proxy,model) pair is in
     // cooldown — no session claim, no run registration, no upstream spam.
