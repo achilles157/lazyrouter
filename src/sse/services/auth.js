@@ -224,15 +224,11 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       connection = availableConnections[0];
     }
 
-    // Freebuff must always resolve through a proxy pool scoped to the
-    // provider+model (free tier is IP-gated), even when the account itself
-    // has no explicit pool ids — pool fitness picks the healthiest pool.
-    const psdForProxy = providerId === "freebuff"
-      ? { ...(connection.providerSpecificData || {}), proxyPoolScope: `${providerId}::${model || ""}` }
-      : connection.providerSpecificData?.proxyPoolIds?.length
-        ? { ...connection.providerSpecificData, proxyPoolScope: `${providerId}::${model || ""}` }
-        : connection.providerSpecificData;
-    const resolvedProxy = await resolveConnectionProxyConfig(psdForProxy || {});
+    // NOTE: VansRouter keys pool fitness off a `proxyPoolScope` value injected
+    // here. This fork's resolveConnectionProxyConfig() only reads proxyPoolId,
+    // so that value was dead code — fitness is applied when the pool list is
+    // rotated in getProviderCredentials() instead.
+    const resolvedProxy = await resolveConnectionProxyConfig(connection.providerSpecificData || {});
 
     return {
       authType: connection.authType,

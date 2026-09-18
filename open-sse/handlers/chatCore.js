@@ -13,6 +13,9 @@ import { HTTP_STATUS, TOKEN_SAVER_HEADER } from "../config/runtimeConfig.js";
 import { handleBypassRequest } from "../utils/bypassHandler.js";
 import { trackPendingRequest, appendRequestLog, saveRequestDetail } from "@/lib/usageDb.js";
 import { getExecutor } from "../executors/index.js";
+import { markPoolUnfit, loadPoolFitness, fitPoolIds } from "../services/proxyPoolFitness.js";
+import { pickProxyPoolId, resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
+import { getProxyPools } from "@/lib/localDb";
 import { supportsGrokCliReasoningEffort } from "../config/grokCli.js";
 import { buildRequestDetail, extractRequestConfig } from "./chatCore/requestDetail.js";
 import { handleForcedSSEToJson } from "./chatCore/sseToJsonHandler.js";
@@ -364,7 +367,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     log, provider, model, reqTag
   });
 
-  const proxyOptions = {
+  let proxyOptions = {
     connectionProxyEnabled: credentials?.providerSpecificData?.connectionProxyEnabled === true,
     connectionProxyUrl: credentials?.providerSpecificData?.connectionProxyUrl || "",
     connectionNoProxy: credentials?.providerSpecificData?.connectionNoProxy || "",
@@ -400,13 +403,86 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     log?.debug?.("PROXY", `${provider.toUpperCase()} | ${model} | conn=${connectionName} | no_proxy=${proxyOptions.connectionNoProxy}`);
   }
 
+  // Pool-scoped failures (e.g. freebuff limited-IP) are retried on a different
+  // proxy pool instead of failing the request outright. The failing pool is
+  // marked unfit for this provider::model scope so the next request skips it.
+  const MAX_POOL_RETRIES = 2;
+  const proxyScope = () => `${provider}::${model}`;
+
+  const applyResolvedProxy = (resolved) => {
+    const next = {
+      connectionProxyEnabled: resolved.connectionProxyEnabled === true,
+      connectionProxyUrl: resolved.connectionProxyUrl || "",
+      connectionNoProxy: resolved.connectionNoProxy || "",
+      vercelRelayUrl: resolved.vercelRelayUrl || "",
+      proxyPoolId: resolved.proxyPoolId || null,
+    };
+    credentials.providerSpecificData = {
+      ...(credentials.providerSpecificData || {}),
+      connectionProxyEnabled: next.connectionProxyEnabled,
+      connectionProxyUrl: next.connectionProxyUrl,
+      connectionNoProxy: next.connectionNoProxy,
+      connectionProxyPoolId: next.proxyPoolId,
+      vercelRelayUrl: next.vercelRelayUrl,
+    };
+    proxyOptions = next;
+  };
+
+  const repickProxyPool = async (excludePoolId) => {
+    try {
+      const scopedIds = Array.isArray(credentials?.providerSpecificData?.proxyPoolIds)
+        ? credentials.providerSpecificData.proxyPoolIds.filter(Boolean)
+        : [];
+      let candidateIds = scopedIds;
+      if (!candidateIds.length) {
+        const pools = await getProxyPools({ isActive: true });
+        candidateIds = pools.filter((pool) => pool.proxyUrl).map((pool) => pool.id);
+      }
+      const remaining = candidateIds.filter((id) => id && id !== excludePoolId);
+      if (!remaining.length) return null;
+
+      const scope = proxyScope();
+      await Promise.all(remaining.map((id) => loadPoolFitness(id)));
+      const fitIds = fitPoolIds(remaining, scope);
+      const chosen = pickProxyPoolId(fitIds.length ? fitIds : remaining, "round-robin", provider);
+      if (!chosen || chosen === excludePoolId) return null;
+
+      const resolved = await resolveConnectionProxyConfig({ proxyPoolId: chosen });
+      if (!resolved?.proxyPoolId || (!resolved.connectionProxyUrl && !resolved.vercelRelayUrl)) return null;
+      return resolved;
+    } catch (error) {
+      log?.warn?.("PROXY", `${provider.toUpperCase()} | pool re-resolve failed: ${error.message}`);
+      return null;
+    }
+  };
+
+  const executeWithPoolFallback = async (attempt = 0) => {
+    try {
+      return await executor.execute({ model, body: translatedBody, stream, credentials, signal: streamController.signal, log, proxyOptions });
+    } catch (error) {
+      const scoped = error?.poolScoped;
+      if (!scoped || attempt >= MAX_POOL_RETRIES) throw error;
+
+      const failedPool = scoped.poolId || proxyOptions.proxyPoolId || null;
+      if (failedPool) {
+        await markPoolUnfit(failedPool, scoped.scope || proxyScope(), error.resetsAtMs, scoped.reason || "pool-scoped");
+      }
+      const resolved = await repickProxyPool(failedPool);
+      if (!resolved) throw error;
+
+      applyResolvedProxy(resolved);
+      log?.info?.("PROXY", `${provider.toUpperCase()} | ${model} | pool-scoped failure (${scoped.reason || "unknown"}) — retry ${attempt + 1}/${MAX_POOL_RETRIES} on pool ${resolved.proxyPoolId}`);
+      return executeWithPoolFallback(attempt + 1);
+    }
+  };
+
   // Execute request
   let providerResponse, providerUrl, providerHeaders, finalBody;
   // Most executors return their registry format. Cursor AgentService is an
   // exception: it is decoded by the executor into OpenAI-compatible output.
   let providerResponseFormat = targetFormat;
   try {
-    const result = await executor.execute({ model, body: translatedBody, stream, credentials, signal: streamController.signal, log, proxyOptions });
+    const result = await executeWithPoolFallback();
     providerResponse = result.response;
     providerUrl = result.url;
     providerHeaders = result.headers;

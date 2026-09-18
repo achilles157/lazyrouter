@@ -37,7 +37,7 @@ vi.mock("@/models", () => ({
 
 import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js";
 import { resolveConnectionProxyConfig, pickProxyPoolId } from "../../src/lib/network/connectionProxy.js";
-import { markPoolUnfit, clearPoolUnfit, isPoolFit, fitPoolIds, loadPoolFitness, resetPoolFitness } from "../../open-sse/services/proxyPoolFitness.js";
+import { markPoolUnfit, clearPoolUnfit, clearAllPoolUnfit, isPoolFit, fitPoolIds, loadPoolFitness, resetPoolFitness } from "../../open-sse/services/proxyPoolFitness.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -91,6 +91,13 @@ async function startOrigin() {
   return { server, port, seen, url: `http://127.0.0.1:${port}` };
 }
 
+// Undici may silently retry a request on a stale keep-alive connection, so
+// counts are not stable across tests. Tag every request with a unique marker
+// and assert on that instead.
+let markerSeq = 0;
+const nextMarker = () => `marker-${Date.now()}-${++markerSeq}`;
+const originHitsFor = (marker) => origin.seen.filter((entry) => entry.marker === marker);
+
 async function freePort() {
   const server = http.createServer();
   const port = await listen(server);
@@ -130,30 +137,32 @@ afterAll(() => {
 describe("proxy pool → trafik benar-benar lewat proxy", () => {
   it("merutekan request melalui connectionProxyUrl dan menandai origin", async () => {
     const before = proxy.stats.hits;
+    const marker = nextMarker();
     const res = await proxyAwareFetch(
       `${origin.url}/ping`,
-      { headers: { "x-test-marker": "via-pool" } },
+      { headers: { "x-test-marker": marker } },
       { connectionProxyEnabled: true, connectionProxyUrl: proxy.url },
     );
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toMatchObject({ ok: true, path: "/ping" });
-    expect(proxy.stats.hits).toBe(before + 1);
-    expect(origin.seen.at(-1)).toEqual({ url: "/ping", marker: "via-pool" });
+    expect(proxy.stats.hits).toBeGreaterThan(before);
+    expect(proxy.stats.connectTargets.some((t) => t === `127.0.0.1:${origin.port}`)).toBe(true);
+    expect(originHitsFor(marker).length).toBeGreaterThanOrEqual(1);
   });
 
   it("menghormati connectionNoProxy dan lewat langsung", async () => {
     const before = proxy.stats.hits;
-    const beforeOrigin = origin.seen.length;
+    const marker = nextMarker();
     const res = await proxyAwareFetch(
       `${origin.url}/direct`,
-      { headers: { "x-test-marker": "bypass" } },
+      { headers: { "x-test-marker": marker } },
       { connectionProxyEnabled: true, connectionProxyUrl: proxy.url, connectionNoProxy: "127.0.0.1" },
     );
 
     expect(res.status).toBe(200);
     expect(proxy.stats.hits).toBe(before);
-    expect(origin.seen.length).toBe(beforeOrigin + 1);
+    expect(originHitsFor(marker).length).toBeGreaterThanOrEqual(1);
   });
 
   it("strictProxy=true gagal keras saat proxy mati (tidak diam-diam direct)", async () => {
@@ -169,15 +178,15 @@ describe("proxy pool → trafik benar-benar lewat proxy", () => {
 
   it("tanpa strictProxy, proxy mati jatuh ke direct (perilaku saat ini)", async () => {
     const deadPort = await freePort();
-    const beforeOrigin = origin.seen.length;
-    const res = await proxyAwareFetch(`${origin.url}/fallback`, {}, {
+    const marker = nextMarker();
+    const res = await proxyAwareFetch(`${origin.url}/fallback`, { headers: { "x-test-marker": marker } }, {
       connectionProxyEnabled: true,
       connectionProxyUrl: `http://127.0.0.1:${deadPort}`,
       strictProxy: false,
     });
 
     expect(res.status).toBe(200);
-    expect(origin.seen.length).toBe(beforeOrigin + 1);
+    expect(originHitsFor(marker).length).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -296,11 +305,34 @@ describe("integrasi registry fitness dengan pemilih pool", () => {
     expect(pickProxyPoolId(fitIds.length ? fitIds : poolIds, "round-robin", "freebuff")).toBe("pool-a");
   });
 
-  it("guard: chatCore meneruskan proxyPoolId ke proxyOptions", () => {
-    const src = readFileSync(fileURLToPath(new URL("../../open-sse/handlers/chatCore.js", import.meta.url)), "utf8");
-    const block = src.slice(src.indexOf("const proxyOptions = {"), src.indexOf("const proxyOptions = {") + 600);
+  it("entri kedaluwarsa diabaikan tanpa perlu dibersihkan manual", async () => {
+    await markPoolUnfit("pool-a", "freebuff::m", Date.now() - 1, "limited_ip");
+    expect(isPoolFit("pool-a", "freebuff::m")).toBe(true);
+    expect(fitPoolIds(["pool-a"], "freebuff::m")).toEqual(["pool-a"]);
+  });
 
+  it("clearAllPoolUnfit hanya membersihkan scope provider yang diminta", async () => {
+    await markPoolUnfit("pool-a", "freebuff::m", Date.now() + 60_000, "limited_ip");
+    await markPoolUnfit("pool-a", "opencode::m", Date.now() + 60_000, "limited_ip");
+
+    await clearAllPoolUnfit("freebuff");
+    expect(isPoolFit("pool-a", "freebuff::m")).toBe(true);
+    expect(isPoolFit("pool-a", "opencode::m")).toBe(false);
+  });
+
+  it("guard: chatCore membawa proxyPoolId dan retry pool-scoped", () => {
+    const src = readFileSync(fileURLToPath(new URL("../../open-sse/handlers/chatCore.js", import.meta.url)), "utf8");
+    const at = src.indexOf("proxyOptions = {");
+    expect(at).toBeGreaterThan(-1);
+
+    const block = src.slice(at, at + 700);
     expect(block).toContain("proxyPoolId");
     expect(block).toContain("connectionProxyPoolId");
+
+    // Retry lintas-pool: penanda poolScoped harus dikonsumsi, bukan diabaikan.
+    expect(src).toContain("executeWithPoolFallback");
+    expect(src).toContain("error?.poolScoped");
+    expect(src).toContain("markPoolUnfit(");
+    expect(src).toContain("repickProxyPool");
   });
 });
