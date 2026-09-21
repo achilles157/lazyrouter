@@ -150,6 +150,7 @@ import p145 from "./upstage.js";
 import p146 from "./volcengine.js";
 import p147 from "./wandb.js";
 import p148 from "./zenmux.js";
+import p149 from "./agentrouter.js";
 
 export default [
   p0,
@@ -299,4 +300,5 @@ export default [
   p146,
   p147,
   p148,
+  p149,
 ];
