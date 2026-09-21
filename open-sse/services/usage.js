@@ -17,6 +17,7 @@ import { getDeepseekUsage } from "./usage/deepseek.js";
 import { getZedUsage } from "./usage/zed.js";
 import { getFreebuffUsage } from "./usage/freebuff.js";
 import { getAutoclawBalance } from "./usage/autoclaw.js";
+import { getOpenCodeGoUsage } from "./usage/opencode-go.js";
 import { resolveQoderCredentials } from "./qoderModels.js";
 import { getGlmUsage } from "./usage/glm.js";
 import {
@@ -58,6 +59,7 @@ const USAGE_HANDLERS = {
   freebuff: (c) => getFreebuffUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
   autoclaw: (c) => getAutoclawBalance(c.accessToken, c.providerSpecificData, c.proxyOptions),
   "grok-cli": (c) => getGrokCliUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),
+  "opencode-go": (c) => getOpenCodeGoUsage(c.apiKey, c.proxyOptions),
   kimi: (c) => getKimiUsage(c.accessToken, c.apiKey, c.proxyOptions, c.providerSpecificData),
   deepseek: (c) => getDeepseekUsage(c.apiKey, c.proxyOptions),
   zed: (c) => getZedUsage(c.accessToken, c.providerSpecificData, c.proxyOptions),

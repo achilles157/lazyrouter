@@ -458,7 +458,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   const executeWithPoolFallback = async (attempt = 0) => {
     try {
-      return await executor.execute({ model, body: translatedBody, stream, credentials, signal: streamController.signal, log, proxyOptions });
+      return await executor.execute({ model, body: translatedBody, stream, credentials, signal: streamController.signal, log, proxyOptions, providerSessionId: sessionSeed, clientTool });
     } catch (error) {
       const scoped = error?.poolScoped;
       if (!scoped || attempt >= MAX_POOL_RETRIES) throw error;
@@ -536,7 +536,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
           try { await onCredentialsRefreshed(newCredentials); } catch (e) { log?.warn?.("TOKEN", `onCredentialsRefreshed failed: ${e.message}`); }
         }
         try {
-          const retryResult = await executor.execute({ model, body: translatedBody, stream, credentials, signal: streamController.signal, log, proxyOptions });
+          const retryResult = await executor.execute({ model, body: translatedBody, stream, credentials, signal: streamController.signal, log, proxyOptions, providerSessionId: sessionSeed, clientTool });
           if (retryResult.response.ok) {
             providerResponse = retryResult.response;
             providerUrl = retryResult.url;
