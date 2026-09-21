@@ -132,6 +132,24 @@ import p128 from "./bytez.js";
 import p129 from "./deepinfra.js";
 import p130 from "./friendliai.js";
 import p131 from "./nscale.js";
+// Registry-only API-key providers ported from VansRouter (batch 2)
+import p132 from "./a6api.js";
+import p133 from "./alibaba.js";
+import p134 from "./codestral.js";
+import p135 from "./databricks.js";
+import p136 from "./galadriel.js";
+import p137 from "./gigachat.js";
+import p138 from "./heroku.js";
+import p139 from "./llamagate.js";
+import p140 from "./nanogpt.js";
+import p141 from "./ovhcloud.js";
+import p142 from "./predibase.js";
+import p143 from "./publicai.js";
+import p144 from "./snowflake.js";
+import p145 from "./upstage.js";
+import p146 from "./volcengine.js";
+import p147 from "./wandb.js";
+import p148 from "./zenmux.js";
 
 export default [
   p0,
@@ -264,4 +282,21 @@ export default [
   p129,
   p130,
   p131,
+  p132,
+  p133,
+  p134,
+  p135,
+  p136,
+  p137,
+  p138,
+  p139,
+  p140,
+  p141,
+  p142,
+  p143,
+  p144,
+  p145,
+  p146,
+  p147,
+  p148,
 ];
