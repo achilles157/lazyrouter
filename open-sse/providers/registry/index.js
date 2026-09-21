@@ -125,6 +125,13 @@ import p121 from "./alitp-intl.js";
 import p122 from "./xquik.js";
 import p124 from "./freebuff.js";
 import p125 from "./autoclaw.js";
+// Free API-key providers ported from VansRouter (free tier, no custom executor)
+import p126 from "./ai21.js";
+import p127 from "./baseten.js";
+import p128 from "./bytez.js";
+import p129 from "./deepinfra.js";
+import p130 from "./friendliai.js";
+import p131 from "./nscale.js";
 
 export default [
   p0,
@@ -194,7 +201,6 @@ export default [
   p64,
   p65,
   p66,
-  p123,
   p67,
   p68,
   p69,
@@ -252,4 +258,10 @@ export default [
   p123,
   p124,
   p125,
+  p126,
+  p127,
+  p128,
+  p129,
+  p130,
+  p131,
 ];
