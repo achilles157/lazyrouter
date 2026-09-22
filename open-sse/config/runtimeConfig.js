@@ -93,6 +93,30 @@ export function resolveRetryEntry(entry) {
 }
 
 // Requests containing these texts will bypass provider
+/**
+ * Cap retry attempts based on how many accounts the user has configured for a provider.
+ * More accounts → fail faster and fall back to the next account instead of burning time
+ * retrying the same stalled account.
+ *   - >= 5 accounts: max 1 retry attempt per account
+ *   - >= 3 accounts: max 2 retry attempts per account
+ *   - <  3 accounts: keep configured attempts (no cap)
+ */
+export function capRetryAttemptsByAccountCount(retryConfig, accountCount) {
+  if (!accountCount || accountCount < 3) return retryConfig;
+  const maxAttempts = accountCount >= 5 ? 1 : 2;
+  const capped = {};
+  for (const [status, entry] of Object.entries(retryConfig)) {
+    if (entry == null) {
+      capped[status] = entry;
+    } else if (typeof entry === "number") {
+      capped[status] = Math.min(entry, maxAttempts);
+    } else {
+      capped[status] = { ...entry, attempts: Math.min(entry.attempts ?? 0, maxAttempts) };
+    }
+  }
+  return capped;
+}
+
 export const SKIP_PATTERNS = [
   "Please write a 5-10 word title for the following conversation:"
 ];

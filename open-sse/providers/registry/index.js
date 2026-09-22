@@ -151,6 +151,8 @@ import p146 from "./volcengine.js";
 import p147 from "./wandb.js";
 import p148 from "./zenmux.js";
 import p149 from "./agentrouter.js";
+import p150 from "./zcode.js";
+import p151 from "./qwen.js";
 
 export default [
   p0,
@@ -301,4 +303,6 @@ export default [
   p147,
   p148,
   p149,
+  p150,
+  p151,
 ];

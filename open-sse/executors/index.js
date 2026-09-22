@@ -12,6 +12,8 @@ import { VertexExecutor } from "./vertex.js";
 import { OpenCodeExecutor } from "./opencode.js";
 import { OpenCodeGoExecutor } from "./opencode-go.js";
 import { AgentRouterExecutor } from "./agentrouter.js";
+import { ZcodeExecutor } from "./zcode.js";
+import { QwenExecutor } from "./qwen.js";
 import { GrokWebExecutor } from "./grok-web.js";
 import { GrokCliExecutor } from "./grok-cli.js";
 import { PerplexityWebExecutor } from "./perplexity-web.js";
@@ -47,6 +49,8 @@ const executors = {
   opencode: new OpenCodeExecutor(),
   "opencode-go": new OpenCodeGoExecutor(),
   agentrouter: new AgentRouterExecutor(),
+  zcode: new ZcodeExecutor(),
+  qwen: new QwenExecutor(),
   "grok-web": new GrokWebExecutor(),
   "grok-cli": new GrokCliExecutor(),
   gcli: new GrokCliExecutor(), // Alias
@@ -96,6 +100,8 @@ export { DefaultExecutor } from "./default.js";
 export { OpenCodeExecutor } from "./opencode.js";
 export { OpenCodeGoExecutor } from "./opencode-go.js";
 export { AgentRouterExecutor } from "./agentrouter.js";
+export { ZcodeExecutor } from "./zcode.js";
+export { QwenExecutor } from "./qwen.js";
 export { GrokWebExecutor } from "./grok-web.js";
 export { GrokCliExecutor } from "./grok-cli.js";
 export { PerplexityWebExecutor } from "./perplexity-web.js";
