@@ -335,4 +335,20 @@ describe("integrasi registry fitness dengan pemilih pool", () => {
     expect(src).toContain("markPoolUnfit(");
     expect(src).toContain("repickProxyPool");
   });
+
+  it("guard: freebuff hanya dipaksa lewat proxy kalau ada pool terikat", () => {
+    const src = readFileSync(fileURLToPath(new URL("../../open-sse/handlers/chatCore.js", import.meta.url)), "utf8");
+    const start = src.indexOf('provider === "freebuff" &&');
+    expect(start).toBeGreaterThan(-1);
+
+    const guard = src.slice(start - 600, start + 400);
+    // Guard harus bergantung pada proxyPoolId (pool terikat) ...
+    expect(guard).toContain("proxyOptions.proxyPoolId");
+    // ... dan menolak hanya kalau tidak ada proxy yang benar-benar terpakai.
+    expect(guard).toContain("!proxyOptions.connectionProxyUrl");
+    expect(guard).toContain("!proxyOptions.vercelRelayUrl");
+    expect(guard).toContain("refusing to fall back to direct egress");
+    // Tanpa pool terikat, guard tidak boleh aktif.
+    expect(guard).not.toContain('provider === "freebuff" && !proxyOptions');
+  });
 });

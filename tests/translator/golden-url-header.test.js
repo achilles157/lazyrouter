@@ -31,6 +31,14 @@ function sanitize(headers) {
       ? v.replace(/Bearer .+/, "Bearer <TOK>")
           .replace(/sk-test-APIKEY|tok-test-ACCESS/g, "<CRED>")
           .replace(/kimi-\d{10,}/g, "kimi-<TS>")
+          // Volatile build/runtime metadata: this golden exists to catch header
+          // and URL drift, so app/node versions and host details must not break it
+          // on every bump.
+          .replace(/9Router\/\d+\.\d+\.\d+/, "9Router/<VERSION>")
+          .replace(/^v\d+\.\d+\.\d+$/, "v<NODE>")
+          .replace(/^\d+\.\d+\.\d+$/, "<VERSION>")
+          .replace(/^(DESKTOP|LAPTOP)-[A-Za-z0-9-]+$/, "<HOST>")
+          .replace(/^Windows .+$/, "Windows <ARCH>")
       : v;
   }
   return out;

@@ -1,9 +1,5 @@
 tests/translator/bugs-toClaude-context.test.js :: OpenAI → Claude context mapping assistant reasoning_content becomes a thinking block
 tests/translator/golden-request.test.js :: GOLDEN request: OpenAI → Kiro full body (image base64 + tool_result)
-tests/translator/golden-url-header.test.js :: GOLDEN buildHeaders (default executor providers) cline → headers (apiKey / oauth)
-tests/translator/golden-url-header.test.js :: GOLDEN buildHeaders (default executor providers) clinepass → headers (apiKey / oauth)
-tests/translator/golden-url-header.test.js :: GOLDEN buildHeaders (default executor providers) kimi → headers (apiKey / oauth)
-tests/translator/thinking-unified.test.js :: applyThinking per provider format GLM-5.3 auto → reasoning_effort=low (low|high|max only, per z.ai docs)
 tests/unit/claude-header-forwarding.test.js :: proxyAwareFetch — api.anthropic.com routing routes api.anthropic.com to gotScraping (non-streaming) and returns ok response
 tests/unit/codebuddy-bulk-import-manager.test.js :: CodeBuddyBulkImportManager does not mark CodeBuddy OAuth success as final success when API key creation fails
 tests/unit/codebuddy-cn-5sim-quote-route.test.js :: CodeBuddy CN 5sim quote route falls back from direct 5sim readiness check to active proxy pool routes
@@ -102,6 +98,7 @@ tests/unit/kiro-executor-reasoning.test.js :: KiroExecutor reasoning stream poli
 tests/unit/kiro-terminal-integrity.test.js :: Kiro terminal integrity recovery bounds the retry HTTP error body
 tests/unit/kiro-terminal-integrity.test.js :: Kiro terminal integrity recovery surfaces retry HTTP failures as SSE after heartbeat commits headers
 tests/unit/kiroGoogleAutomation.email.test.js :: fillInputResilient uses fill() and accepts when inputValue matches
+tests/unit/mimo-free.test.js :: MiMo Free provider registration maps the mimo-free alias to mmf
 tests/unit/model-routing.test.js :: model routing keeps built-in provider aliases ahead of compatible node prefixes
 tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import extracts tokens using exact keys
 tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import falls back to fuzzy key matching on macOS when exact keys are missing
@@ -122,5 +119,3 @@ tests/unit/translator-request-normalization.test.js :: request normalization tra
 tests/unit/windsurf-executor.test.js :: WindsurfExecutor class PROVIDERS.windsurf baseUrl is the chat endpoint (registry in sync)
 tests/unit/windsurf-executor.test.js :: WindsurfExecutor class buildUrl returns the GetChatMessage endpoint
 tests/unit/windsurf-executor.test.js :: WindsurfExecutor class constructor wires config from PROVIDERS.windsurf
-tests/unit/xai-oauth-service.test.js :: xai/oauth service exchanges dashboard codes against the discovered xAI token endpoint
-tests/unit/xai-oauth-service.test.js :: xai/oauth service generates dashboard auth data with CLIProxyAPI PKCE size and discovered endpoints

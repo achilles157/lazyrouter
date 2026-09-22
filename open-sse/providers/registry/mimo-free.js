@@ -5,7 +5,6 @@ export default {
   hidden: true,
   priority: 50,
   hasFree: true,
-  alias: "mmf",
   uiAlias: "mmf",
   display: {
     name: "MiMo Code Free",

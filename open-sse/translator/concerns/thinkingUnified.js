@@ -74,7 +74,10 @@ export function extractThinking(body) {
     if (t.type === "adaptive" || t.type === "enabled") {
       const budget = Number(t.budget_tokens);
       if (Number.isFinite(budget) && budget > 0) return { mode: "budget", budget };
-      return { mode: "auto" };
+      // `adaptive` is Claude's "let the model decide", which is not the same intent
+      // as an explicit reasoning_effort:"auto" — the zai branch maps them
+      // differently (adaptive keeps more thinking, auto takes the documented default).
+      return { mode: "auto", adaptive: true };
     }
   }
 
@@ -275,10 +278,12 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels) {
       // don't send a field the API doesn't recognize.
       if (caps.thinkingEffortSupported) {
         const zaiLvl = toLevel(eff);
-        // GLM-5.3 accepts exactly low|high|max. Default/auto maps to high (standard z.ai default).
-        body.reasoning_effort = (zaiLvl === "low" || zaiLvl === "minimal") ? "low"
-          : (zaiLvl === "max" || zaiLvl === "xhigh" || zaiLvl === "ultra") ? "max"
-          : "high";
+        // GLM-5.3 accepts exactly low|high|max. An explicit reasoning_effort:"auto"
+        // takes the z.ai documented default (low); Claude-style adaptive thinking
+        // keeps the higher setting, and medium collapses up to high.
+        body.reasoning_effort = (zaiLvl === "max" || zaiLvl === "xhigh" || zaiLvl === "ultra") ? "max"
+          : (zaiLvl === "high" || zaiLvl === "medium" || eff?.adaptive === true) ? "high"
+          : "low";
       }
       break;
     }

@@ -403,6 +403,24 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     log?.debug?.("PROXY", `${provider.toUpperCase()} | ${model} | conn=${connectionName} | no_proxy=${proxyOptions.connectionNoProxy}`);
   }
 
+  // Freebuff guard, conditional on a pool actually being bound: the free tier is
+  // IP-gated, so once a proxy pool is in play the request must not silently egress
+  // over the local IP. With no pool configured at all, direct egress stays allowed
+  // (a single personal account is fine that way) — but the moment a pool is bound
+  // or picked and does not resolve to a usable proxy, fail loudly instead of
+  // quietly going direct.
+  if (
+    provider === "freebuff" &&
+    proxyOptions.proxyPoolId &&
+    !proxyOptions.connectionProxyUrl &&
+    !proxyOptions.vercelRelayUrl
+  ) {
+    const message = `Freebuff is bound to proxy pool ${proxyOptions.proxyPoolId} but no usable proxy resolved for ${model}; refusing to fall back to direct egress. Fix the pool (or unbind it) and retry.`;
+    log?.errorLine?.(reqTag, "✗", `ERROR 503 · ${provider}/${model} · ${message}`);
+    trackPendingRequest(model, provider, connectionId, false, true);
+    return createErrorResult(503, message);
+  }
+
   // Pool-scoped failures (e.g. freebuff limited-IP) are retried on a different
   // proxy pool instead of failing the request outright. The failing pool is
   // marked unfit for this provider::model scope so the next request skips it.
