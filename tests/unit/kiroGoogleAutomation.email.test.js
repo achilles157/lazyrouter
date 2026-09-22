@@ -16,6 +16,7 @@ function makeMockLocator({ count = 1, visible = true, value = "" } = {}) {
     fill: vi.fn(async (v) => { state.value = v; }),
     type: vi.fn(async (v) => { state.value = v; }),
     click: vi.fn(async () => {}),
+    press: vi.fn(async () => {}),
     inputValue: vi.fn(async () => state.value),
     first: function () { return this; },
     __state: state,

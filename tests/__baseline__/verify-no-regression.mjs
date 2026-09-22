@@ -12,9 +12,21 @@ const resultsPath = process.argv[2];
 if (!resultsPath) { console.error("Missing results.json path"); process.exit(2); }
 
 const r = JSON.parse(readFileSync(resultsPath, "utf8"));
+
+// Results can come from CI (absolute paths containing /app/) or from a local run
+// (Windows or POSIX paths). Normalise both to a repo-relative `tests/...` path so
+// the comparison against known-fails.txt works in either place.
+const rel = (name) => {
+  const n = String(name).replace(/\\/g, "/");
+  const appIdx = n.indexOf("/app/");
+  if (appIdx >= 0) return n.slice(appIdx + 5);
+  const testsIdx = n.indexOf("tests/");
+  return testsIdx >= 0 ? n.slice(testsIdx) : n;
+};
+
 const nowFails = r.testResults.flatMap(f =>
   f.assertionResults.filter(a => a.status === "failed")
-    .map(a => f.name.split("/app/")[1] + " :: " + a.fullName)
+    .map(a => rel(f.name) + " :: " + a.fullName)
 );
 
 // Regression = fail bây giờ NHƯNG không có trong baseline known-fails

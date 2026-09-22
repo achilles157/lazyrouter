@@ -1,4 +1,108 @@
+tests/translator/bugs-toClaude-context.test.js :: OpenAI → Claude context mapping assistant reasoning_content becomes a thinking block
+tests/translator/golden-request.test.js :: GOLDEN request: OpenAI → Kiro full body (image base64 + tool_result)
+tests/translator/golden-url-header.test.js :: GOLDEN buildHeaders (default executor providers) cline → headers (apiKey / oauth)
+tests/translator/golden-url-header.test.js :: GOLDEN buildHeaders (default executor providers) clinepass → headers (apiKey / oauth)
+tests/translator/golden-url-header.test.js :: GOLDEN buildHeaders (default executor providers) kimi → headers (apiKey / oauth)
+tests/translator/thinking-unified.test.js :: applyThinking per provider format GLM-5.3 auto → reasoning_effort=low (low|high|max only, per z.ai docs)
 tests/unit/claude-header-forwarding.test.js :: proxyAwareFetch — api.anthropic.com routing routes api.anthropic.com to gotScraping (non-streaming) and returns ok response
+tests/unit/codebuddy-bulk-import-manager.test.js :: CodeBuddyBulkImportManager does not mark CodeBuddy OAuth success as final success when API key creation fails
+tests/unit/codebuddy-cn-5sim-quote-route.test.js :: CodeBuddy CN 5sim quote route falls back from direct 5sim readiness check to active proxy pool routes
+tests/unit/codebuddy-cn-5sim-quote-route.test.js :: CodeBuddy CN 5sim quote route tries another route when a selected proxy cannot create a 5sim client
+tests/unit/codebuddy-cn-5sim-quote-route.test.js :: CodeBuddy CN 5sim quote route tries the next selected proxy before reporting a transient 5sim failure
+tests/unit/codebuddy-cn-executor.test.js :: CodeBuddy CN executor retries content-filter failures with a compact safe chat payload
+tests/unit/codebuddy-cn-executor.test.js :: CodeBuddy CN executor retries streamed content-filter replies with a compact safe chat payload
+tests/unit/codebuddy-cn-phone-import.test.js :: FiveSimClient retries transient 5sim buy activation gateway errors before succeeding
+tests/unit/codebuddy-cn-phone-import.test.js :: FiveSimClient retries transient 5sim check gateway errors five times before the next poll
+tests/unit/codebuddy-cn-phone-import.test.js :: FiveSimClient retries transient 5sim profile gateway errors before failing readiness
+tests/unit/codebuddy-cn-provider-test.test.js :: CodeBuddy CN provider test validates generated API keys through quota endpoint instead of chat prompt
+tests/unit/codebuddy-cn-usage.test.js :: CodeBuddy CN usage normalizes Chinese upstream package names for UI display
+tests/unit/codebuddy-headers-simple.test.js :: CodeBuddy buildHeaders() - RED phase test should include X-App: cli header
+tests/unit/codebuddy-headers-simple.test.js :: CodeBuddy buildHeaders() - RED phase test should include X-Stainless-Helper-Method: stream header
+tests/unit/codebuddy-headers-simple.test.js :: CodeBuddy buildHeaders() - RED phase test should include X-Stainless-Lang: js header
+tests/unit/codebuddy-headers-simple.test.js :: CodeBuddy buildHeaders() - RED phase test should include X-Stainless-Retry-Count: 0 header
+tests/unit/codebuddy-headers-simple.test.js :: CodeBuddy buildHeaders() - RED phase test should include X-Stainless-Runtime: node header
+tests/unit/codebuddy-headers.test.js :: DefaultExecutor.buildHeaders() — codebuddy provider should generate X-Conversation-ID header
+tests/unit/codebuddy-headers.test.js :: DefaultExecutor.buildHeaders() — codebuddy provider should generate X-Request-ID header
+tests/unit/codebuddy-headers.test.js :: DefaultExecutor.buildHeaders() — codebuddy provider should include CLI spoofing headers for CodeBuddy provider
+tests/unit/codebuddy-headers.test.js :: DefaultExecutor.buildHeaders() — codebuddy provider should include Content-Type: application/json; charset=utf-8
+tests/unit/codebuddy-headers.test.js :: DefaultExecutor.buildHeaders() — codebuddy provider should include User-Agent header
+tests/unit/codebuddy-headers.test.js :: DefaultExecutor.buildHeaders() — codebuddy provider should include X-Agent-Intent: craft
+tests/unit/codebuddy-headers.test.js :: DefaultExecutor.buildHeaders() — codebuddy provider should include X-Conversation-Message-ID header
+tests/unit/codebuddy-headers.test.js :: DefaultExecutor.buildHeaders() — codebuddy provider should include X-Conversation-Request-ID header
+tests/unit/codebuddy-headers.test.js :: DefaultExecutor.buildHeaders() — codebuddy provider should include X-Domain with custom value when provided in providerSpecificData
+tests/unit/codebuddy-headers.test.js :: DefaultExecutor.buildHeaders() — codebuddy provider should include X-Domain with default value when not provided
+tests/unit/codebuddy-headers.test.js :: DefaultExecutor.buildHeaders() — codebuddy provider should include X-IDE-Name: CLI
+tests/unit/codebuddy-headers.test.js :: DefaultExecutor.buildHeaders() — codebuddy provider should include X-IDE-Type: CLI
+tests/unit/codebuddy-headers.test.js :: DefaultExecutor.buildHeaders() — codebuddy provider should include X-IDE-Version: 2.105.2
+tests/unit/codebuddy-headers.test.js :: DefaultExecutor.buildHeaders() — codebuddy provider should include X-Private-Data: false
+tests/unit/codebuddy-headers.test.js :: DefaultExecutor.buildHeaders() — codebuddy provider should include X-Requested-With: XMLHttpRequest
+tests/unit/codebuddy-provider-registry.test.js :: CodeBuddy provider registry split keeps separate model aliases and default catalogs
+tests/unit/codebuddy-usage.test.js :: CodeBuddy usage does not fall back to cookie when the IDE OAuth token is rejected
+tests/unit/codebuddy-usage.test.js :: CodeBuddy usage does not replay quota with a saved cookie for generated-key connections
+tests/unit/codebuddy-usage.test.js :: CodeBuddy usage fetches quota with IDE access token and saved identity headers
+tests/unit/codebuddy-usage.test.js :: CodeBuddy usage reports chat key active instead of access-token missing for apiKey-only connections
+tests/unit/codex-image-fetch.test.js :: CodexExecutor image handling execute() prefetches images before sending to upstream
+tests/unit/codex-image-fetch.test.js :: CodexExecutor image handling fetches 1MB remote image and inlines it as base64 data URI
+tests/unit/combo-autoswitch.test.js :: detectRequiredCapabilities web_search tool -> search
+tests/unit/combo-autoswitch.test.js :: reorderByCapabilities keeps order when no model matches
+tests/unit/compatible-provider-connections.test.js :: compatible provider connections API creates one API-key connection for an OpenAI-compatible node
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) McpArgs decode decodes name, toolName, toolCallId, and typed args map
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) McpArgs decode handles empty args map
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) McpResult error / toolNotFound builds error result (field 2)
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) McpResult error / toolNotFound builds toolNotFound result (field 5)
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) McpResult image content builds image item with raw bytes + mime type
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) McpResult image content builds mixed text + image content
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) McpResult success builds success with multiple text items
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) McpResult success builds success with single text content
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) McpResult success marks is_error=true
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) McpToolDefinition accepts flat tool shape (no .function wrapper)
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) McpToolDefinition encodes name, description, input_schema (Value), provider, tool_name
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) McpToolDefinition preserves nested JSON-schema types
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) encodeMcpTools produces empty bytes for no tools
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) encodeMcpTools wraps multiple tool defs as repeated field 1
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) google.protobuf.Value round-trip encodes/decodes array of mixed
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) google.protobuf.Value round-trip encodes/decodes bool false
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) google.protobuf.Value round-trip encodes/decodes bool true
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) google.protobuf.Value round-trip encodes/decodes deeply nested
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) google.protobuf.Value round-trip encodes/decodes empty object
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) google.protobuf.Value round-trip encodes/decodes flat object
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) google.protobuf.Value round-trip encodes/decodes float
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) google.protobuf.Value round-trip encodes/decodes integer
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) google.protobuf.Value round-trip encodes/decodes nested object
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) google.protobuf.Value round-trip encodes/decodes null
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService codec (cursorProtobuf.js) google.protobuf.Value round-trip encodes/decodes string
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService executor helpers (cursor.js) buildAgentRunFrame encodes a text-only run request with system + model
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService executor helpers (cursor.js) buildAgentRunFrame encodes conversation_history from prior turns including tool calls/results
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService executor helpers (cursor.js) buildAgentRunFrame encodes mcp_tools (field 4) when tools are provided
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService executor helpers (cursor.js) buildAgentRunFrame omits mcp_tools when no tools provided
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService executor helpers (cursor.js) isAgentCapableRequest accepts array text content
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService executor helpers (cursor.js) isAgentCapableRequest accepts history with assistant tool_calls + tool results
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService executor helpers (cursor.js) isAgentCapableRequest accepts plain text content
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService executor helpers (cursor.js) isAgentCapableRequest accepts request with tools declared
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService executor helpers (cursor.js) isAgentCapableRequest rejects missing messages
+tests/unit/cursor-agent-proto.test.js :: Cursor AgentService executor helpers (cursor.js) isAgentCapableRequest rejects non-text (image) content
+tests/unit/cursor-models.test.js :: Cursor live model catalog fetches the account-specific catalog and caches it
+tests/unit/db-concurrent.test.js :: DB Concurrency — atomic safety 100 parallel saveRequestUsage → no count loss
+tests/unit/db-concurrent.test.js :: DB Concurrency — atomic safety daily summary aggregates correctly under parallel writes
+tests/unit/db-concurrent.test.js :: DB Concurrency — atomic safety mixed concurrent: usage + details + connections + aliases
+tests/unit/executor-const-guard.test.js :: antigravity retry (intentional change: 429=6, 503=3) 429 attempts = 6
+tests/unit/headroom-detect.test.js :: headroom detect prefers the interpreter that actually has headroom-ai installed
+tests/unit/image-fetch-hardening.test.js :: fetchImageAsBase64 hardening accepts valid PNG from public host
+tests/unit/kiro-bulk-import-routes.test.js :: Kiro bulk import routes can request the latest recent terminal job snapshot
+tests/unit/kiro-bulk-import-routes.test.js :: Kiro bulk import routes cancels a known job
+tests/unit/kiro-bulk-import-routes.test.js :: Kiro bulk import routes does not treat recoverable scope as recent terminal history
+tests/unit/kiro-bulk-import-routes.test.js :: Kiro bulk import routes opens a manual session for a blocked worker
+tests/unit/kiro-bulk-import-routes.test.js :: Kiro bulk import routes rejects malformed account lines on start route
+tests/unit/kiro-bulk-import-routes.test.js :: Kiro bulk import routes returns 404 for unknown status job
+tests/unit/kiro-bulk-import-routes.test.js :: Kiro bulk import routes returns recoverable false when no latest job exists
+tests/unit/kiro-bulk-import-routes.test.js :: Kiro bulk import routes returns the latest bulk import job snapshot
+tests/unit/kiro-bulk-import-routes.test.js :: Kiro bulk import routes starts a bulk import job and returns the job payload
+tests/unit/kiro-executor-reasoning.test.js :: KiroExecutor reasoning stream policy emits reasoning chunks when explicitly enabled
+tests/unit/kiro-executor-reasoning.test.js :: KiroExecutor reasoning stream policy hides reasoning chunks by default
+tests/unit/kiro-terminal-integrity.test.js :: Kiro terminal integrity recovery bounds the retry HTTP error body
+tests/unit/kiro-terminal-integrity.test.js :: Kiro terminal integrity recovery surfaces retry HTTP failures as SSE after heartbeat commits headers
+tests/unit/kiroGoogleAutomation.email.test.js :: fillInputResilient uses fill() and accepts when inputValue matches
+tests/unit/model-routing.test.js :: model routing keeps built-in provider aliases ahead of compatible node prefixes
 tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import extracts tokens using exact keys
 tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import falls back to fuzzy key matching on macOS when exact keys are missing
 tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import linux uses single hardcoded path and original error message
@@ -8,17 +112,15 @@ tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import
 tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import unsupported platform returns 400
 tests/unit/oauth-cursor-auto-import.test.js :: GET /api/oauth/cursor/auto-import unwraps JSON-encoded string values
 tests/unit/openai-to-claude.test.js :: openaiToClaudeResponse omits empty Read pages tool argument before emitting Claude input deltas
-tests/unit/rtk.test.js :: RTK flag default off, toggle works
-tests/unit/rtk.test.js :: compressMessages (disabled) returns null when disabled
-tests/unit/rtk.test.js :: compressMessages (enabled) compresses Claude array-form tool_result text parts
-tests/unit/rtk.test.js :: compressMessages (enabled) compresses Claude string-form tool_result
-tests/unit/rtk.test.js :: compressMessages (enabled) compresses OpenAI tool message (string content)
-tests/unit/rtk.test.js :: compressMessages (enabled) handles mix of messages without crashing
-tests/unit/rtk.test.js :: compressMessages (enabled) never produces empty content (R14 guard)
-tests/unit/rtk.test.js :: compressMessages (enabled) skips below MIN_COMPRESS_SIZE (<500 bytes)
-tests/unit/rtk.test.js :: compressMessages (enabled) skips is_error tool_result
-tests/unit/rtk.test.js :: compressMessages (enabled) skips when body has no messages
+tests/unit/request-details-tab.test.js :: getDistinctProviders — providers route (no full-row parse) returns unique provider list without parsing data blobs
+tests/unit/request-details-tab.test.js :: request details — tab crash-risk cases oversized field → stored truncated + reparseable (no circular)
+tests/unit/translator-helpers-edge.test.js :: normalizeClaudePassthrough — haiku adaptive thinking (docs 11 §1) hoists mid-conversation system messages into top-level system
 tests/unit/translator-request-normalization.test.js :: request normalization claudeToOpenAIRequest flattens text-only content arrays into string
 tests/unit/translator-request-normalization.test.js :: request normalization filterToOpenAIFormat flattens text-only arrays to string
 tests/unit/translator-request-normalization.test.js :: request normalization parseSSELine supports provider raw NDJSON stream lines
 tests/unit/translator-request-normalization.test.js :: request normalization translateRequest keeps /v1/messages Claude->OpenAI text payloads string-safe
+tests/unit/windsurf-executor.test.js :: WindsurfExecutor class PROVIDERS.windsurf baseUrl is the chat endpoint (registry in sync)
+tests/unit/windsurf-executor.test.js :: WindsurfExecutor class buildUrl returns the GetChatMessage endpoint
+tests/unit/windsurf-executor.test.js :: WindsurfExecutor class constructor wires config from PROVIDERS.windsurf
+tests/unit/xai-oauth-service.test.js :: xai/oauth service exchanges dashboard codes against the discovered xAI token endpoint
+tests/unit/xai-oauth-service.test.js :: xai/oauth service generates dashboard auth data with CLIProxyAPI PKCE size and discovered endpoints
