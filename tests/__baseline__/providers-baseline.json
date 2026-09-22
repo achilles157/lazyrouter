@@ -708,6 +708,9 @@
   "opencode-go": {
     "baseUrl": "https://opencode.ai/zen/go/v1/chat/completions",
     "headers": {},
+    "usage": {
+      "url": "https://opencode.ai/zen/go/v1/usage"
+    },
     "format": "openai",
     "transports": [
       {
@@ -901,7 +904,7 @@
     },
     "format": "openai"
   },
-  "codebuddy-intl": {
+  "codebuddy": {
     "baseUrl": "https://www.codebuddy.ai/v2/chat/completions",
     "forceStream": true,
     "thinkingFormat": "openai",
@@ -1008,5 +1011,203 @@
       "preserveCacheControl": true
     },
     "format": "openai"
+  },
+  "freebuff": {
+    "baseUrl": "https://www.codebuff.com/api/v1/chat/completions",
+    "format": "openai",
+    "headers": {
+      "User-Agent": "ai-sdk/openai-compatible/1.0/codebuff"
+    },
+    "retry": {
+      "429": {
+        "attempts": 2,
+        "delayMs": 2000
+      },
+      "503": {
+        "attempts": 2,
+        "delayMs": 1500
+      }
+    },
+    "usage": {
+      "url": "https://www.codebuff.com/api/v1/freebuff/session"
+    }
+  },
+  "autoclaw": {
+    "baseUrl": "https://autoglm-api.autoglm.ai/autoclaw-proxy/proxy/autoclaw/v1/chat/completions",
+    "format": "openai",
+    "forceStream": true,
+    "headers": {},
+    "auth": {
+      "header": "X-Authorization",
+      "scheme": "bearer",
+      "combined": true
+    }
+  },
+  "ai21": {
+    "baseUrl": "https://api.ai21.com/studio/v1/chat/completions",
+    "validateUrl": "https://api.ai21.com/studio/v1/models",
+    "format": "openai"
+  },
+  "baseten": {
+    "baseUrl": "https://inference.baseten.co/v1/chat/completions",
+    "validateUrl": "https://inference.baseten.co/v1/models",
+    "format": "openai"
+  },
+  "bytez": {
+    "baseUrl": "https://api.bytez.com/models/v2/openai/v1/chat/completions",
+    "validateUrl": "https://api.bytez.com/models/v2/openai/v1/models",
+    "format": "openai"
+  },
+  "deepinfra": {
+    "baseUrl": "https://api.deepinfra.com/v1/openai/chat/completions",
+    "validateUrl": "https://api.deepinfra.com/v1/openai/models",
+    "format": "openai"
+  },
+  "friendliai": {
+    "baseUrl": "https://api.friendli.ai/serverless/v1/chat/completions",
+    "validateUrl": "https://api.friendli.ai/serverless/v1/models",
+    "format": "openai"
+  },
+  "nscale": {
+    "baseUrl": "https://inference.api.nscale.com/v1/chat/completions",
+    "validateUrl": "https://inference.api.nscale.com/v1/models",
+    "format": "openai"
+  },
+  "a6api": {
+    "baseUrl": "https://a6api.com/v1/chat/completions",
+    "validateUrl": "https://a6api.com/v1/models",
+    "thinkingFormat": "openai",
+    "format": "openai"
+  },
+  "alibaba": {
+    "baseUrl": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
+    "validateUrl": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/models",
+    "format": "openai"
+  },
+  "codestral": {
+    "baseUrl": "https://codestral.mistral.ai/v1/chat/completions",
+    "validateUrl": "https://codestral.mistral.ai/v1/models",
+    "quirks": {
+      "dropClientMetadata": true
+    },
+    "format": "openai"
+  },
+  "databricks": {
+    "baseUrl": "https://adb-0000000000000000.0.azuredatabricks.net/serving-endpoints",
+    "validateUrl": "https://adb-0000000000000000.0.azuredatabricks.net/serving-endpoints",
+    "format": "openai"
+  },
+  "galadriel": {
+    "baseUrl": "https://api.galadriel.ai/v1/chat/completions",
+    "validateUrl": "https://api.galadriel.ai/v1/models",
+    "format": "openai"
+  },
+  "gigachat": {
+    "baseUrl": "https://gigachat.devices.sberbank.ru/api/v1",
+    "validateUrl": "https://gigachat.devices.sberbank.ru/api/v1",
+    "format": "openai"
+  },
+  "heroku": {
+    "baseUrl": "https://us.inference.heroku.com/v1/chat/completions",
+    "validateUrl": "https://us.inference.heroku.com/v1/models",
+    "format": "openai"
+  },
+  "llamagate": {
+    "baseUrl": "https://llamagate.ai/v1/chat/completions",
+    "validateUrl": "https://llamagate.ai/v1/models",
+    "format": "openai"
+  },
+  "nanogpt": {
+    "baseUrl": "https://nano-gpt.com/api/v1/chat/completions",
+    "validateUrl": "https://nano-gpt.com/api/v1/models",
+    "format": "openai"
+  },
+  "ovhcloud": {
+    "baseUrl": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions",
+    "validateUrl": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/models",
+    "format": "openai"
+  },
+  "predibase": {
+    "baseUrl": "https://serving.app.predibase.com/v1/chat/completions",
+    "validateUrl": "https://serving.app.predibase.com/v1/models",
+    "format": "openai"
+  },
+  "publicai": {
+    "baseUrl": "https://api.publicai.co/v1/chat/completions",
+    "validateUrl": "https://api.publicai.co/v1/models",
+    "format": "openai"
+  },
+  "snowflake": {
+    "baseUrl": "https://{account}.snowflakecomputing.com/api/v2",
+    "validateUrl": "https://{account}.snowflakecomputing.com/api/v2",
+    "format": "openai"
+  },
+  "upstage": {
+    "baseUrl": "https://api.upstage.ai/v1/chat/completions",
+    "validateUrl": "https://api.upstage.ai/v1/models",
+    "format": "openai"
+  },
+  "volcengine": {
+    "baseUrl": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+    "validateUrl": "https://ark.cn-beijing.volces.com/api/v3/models",
+    "format": "openai"
+  },
+  "wandb": {
+    "baseUrl": "https://api.inference.wandb.ai/v1/chat/completions",
+    "validateUrl": "https://api.inference.wandb.ai/v1/models",
+    "format": "openai"
+  },
+  "zenmux": {
+    "baseUrl": "https://zenmux.ai/v1/chat/completions",
+    "validateUrl": "https://zenmux.ai/v1/models",
+    "format": "openai"
+  },
+  "agentrouter": {
+    "baseUrl": "https://agentrouter.org/v1/messages",
+    "format": "claude",
+    "timeoutMs": 600000,
+    "auth": {
+      "apiKey": {
+        "header": "x-api-key",
+        "scheme": "raw"
+      }
+    },
+    "forceStream": true,
+    "preserveAccept": true,
+    "retry": {
+      "429": {
+        "attempts": 3,
+        "delayMs": 500
+      },
+      "502": {
+        "attempts": 3,
+        "delayMs": 500
+      },
+      "503": {
+        "attempts": 3,
+        "delayMs": 1000
+      }
+    }
+  },
+  "zcode": {
+    "baseUrl": "https://api.z.ai/api/anthropic/v1/messages",
+    "format": "claude",
+    "headers": {
+      "Anthropic-Version": "2023-06-01",
+      "Anthropic-Beta": "claude-code-20250219,interleaved-thinking-2025-05-14"
+    },
+    "auth": {
+      "combined": true,
+      "header": "x-api-key",
+      "scheme": "raw"
+    },
+    "clientId": "client_P8X5CMWmlaRO9gyO-KSqtg",
+    "tokenUrl": "https://zcode.z.ai/api/v1/oauth/token"
+  },
+  "qwen": {
+    "baseUrl": "https://portal.qwen.ai/v1/chat/completions",
+    "format": "openai",
+    "clientId": "f0304373b74a44d2b584a3fb70ca9e56",
+    "tokenUrl": "https://chat.qwen.ai/api/v1/oauth2/token"
   }
 }
