@@ -10,12 +10,20 @@ import { refreshKiroToken } from "../services/tokenRefresh.js";
 import { SSE_DONE, SSE_HEADERS } from "../utils/sseConstants.js";
 import { getCapabilitiesForModel } from "../providers/capabilities.js";
 import { STREAM_FIRST_CHUNK_TIMEOUT_MS } from "../config/runtimeConfig.js";
+import { AWS_EVENTSTREAM } from "../config/awsConstants.js";
+import { crc32, parseEventFrame } from "../utils/awsEventStream.js";
 
 const KIRO_REPAIR_BUFFER_MAX_BYTES = 8 * 1024 * 1024;
+// Regions per service host; a region outside the set is never spliced into the hostname.
+const KIRO_SERVICE_REGIONS = {
+  q: new Set(["us-east-1", "eu-central-1"]),
+  runtime: new Set(["us-east-1", "eu-central-1"]),
+  codewhisperer: new Set(["us-east-1"]),
+};
 const KIRO_REPAIR_HEARTBEAT_MS = 10_000;
 const KIRO_SHORT_FINAL_MAX_CHARS = 800;
-const EVENTSTREAM_MAX_MESSAGE_BYTES = 24 * 1024 * 1024;
-const EVENTSTREAM_MAX_HEADERS_BYTES = 128 * 1024;
+const EVENTSTREAM_MAX_MESSAGE_BYTES = AWS_EVENTSTREAM.maxMessageBytes;
+const EVENTSTREAM_MAX_HEADERS_BYTES = AWS_EVENTSTREAM.maxHeadersBytes;
 const KIRO_EVENT_TYPES = new Set([
   "assistantResponseEvent",
   "reasoningContentEvent",
@@ -30,14 +38,6 @@ const KIRO_EVENT_TYPES = new Set([
 ]);
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
-const CRC32_TABLE = Uint32Array.from({ length: 256 }, (_, index) => {
-  let value = index;
-  for (let bit = 0; bit < 8; bit++) {
-    value = (value >>> 1) ^ ((value & 1) ? 0xedb88320 : 0);
-  }
-  return value >>> 0;
-});
-
 const REPAIR_INSTRUCTIONS = Object.freeze({
   tool: "Retry the previous response because its Kiro tool_call wrapper was malformed. If you use the wrapper tool named tool_call, its input must contain a non-empty name and an arguments field.",
   ellipsis: "Retry the previous response because it ended with only an ellipsis. Return the complete final answer, not only ... or ….",
@@ -54,12 +54,6 @@ const CHINESE_RESULT_CLAUSE = /(?:[。！？]\s*\S|(?:版本|狀態|回應|結�
 const USER_WAIT = /(?:請(?:你|先)|你(?:先|需要|可以|提供|確認|批准|允許)|等待(?:你|使用者)|等你|核准|同意|授權|\b(?:after|when|once)\s+you\b|\byour\s+(?:approval|confirmation|permission|input)\b|\bwait(?:ing)?\s+for\s+you\b|\bplease\s+(?:approve|confirm|provide|send)\b)/iu;
 const COMPLETED_FINAL = /(?:已(?:經)?完成|完成(?:了|驗證|確認)|修復完成|確認無誤|驗證(?:完成|通過)|測試(?:均)?通過|結論|總結|\b(?:done|completed|fixed|verified|confirmed|passed|in conclusion|summary)\b|\b(?:is|are) complete\b)/iu;
 const RESULT_EVIDENCE = /(?:顯示|發現|因此|成功|失敗|正常|無錯誤|沒有錯誤|\b(?:found|shows?|showed|because|therefore|succeeded|failed|healthy|green|no errors?)\b)/iu;
-
-function crc32(bytes) {
-  let crc = 0xffffffff;
-  for (const byte of bytes) crc = CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
-  return (crc ^ 0xffffffff) >>> 0;
-}
 
 function envPositiveInt(name, fallback) {
   const parsed = Number.parseInt(process.env?.[name] || "", 10);
@@ -127,12 +121,18 @@ async function readResponsePrefix(response, signal, maxBytes, timeoutMs) {
   return decoder.decode(concatChunks(chunks, totalBytes));
 }
 
+// The instruction goes into the current user turn, never into a top-level
+// `systemPrompt`: kiro.dev answers any body carrying that field with
+// 400 REQUEST_BODY_INVALID, so writing it here turned every repair retry into
+// a hard failure.
 function appendRepairInstruction(body, kind) {
   const repaired = structuredClone(body || {});
   const instruction = REPAIR_INSTRUCTIONS[kind] || "Retry the previous incomplete Kiro response.";
-  repaired.systemPrompt = repaired.systemPrompt
-    ? `${repaired.systemPrompt}\n\n${instruction}`
-    : instruction;
+  const msg = repaired?.conversationState?.currentMessage?.userInputMessage;
+  if (msg) {
+    const content = typeof msg.content === "string" ? msg.content : "";
+    msg.content = content ? `${content}\n\n${instruction}` : instruction;
+  }
   return repaired;
 }
 
@@ -259,6 +259,19 @@ export class KiroExecutor extends BaseExecutor {
       }
     }
 
+    // CLIRO parity for the Amazon surfaces: the Kiro runtime accepts the
+    // SSO bearer header + agent-mode marker. Without these the deprecated
+    // path gateway answers REQUEST_BODY_INVALID for modern payloads.
+    if (credentials?.accessToken) {
+      headers["x-amz-sso-bearer"] = credentials.accessToken;
+    }
+    headers["x-amzn-kiro-agent-mode"] = "spec";
+    headers["x-amzn-codewhisperer-machine-id"] = "kiro-desktop";
+    const profileArn = credentials?.providerSpecificData?.profileArn;
+    if (profileArn) {
+      headers["x-amzn-codewhisperer-profile-arn"] = profileArn;
+    }
+
     return headers;
   }
 
@@ -285,32 +298,37 @@ export class KiroExecutor extends BaseExecutor {
     // 403 "bearer token invalid", so they must hit the CodeWhisperer
     // *.amazonaws.com surface, and in the region the token was minted in
     // (the baseUrls are hardcoded us-east-1).
-    const isCodeWhispererSurface =
-      authMethod === "api_key" || authMethod === "external_idp" || authMethod === "idc";
-    if (!isCodeWhispererSurface) return baseUrls;
+    // Kiro deprecated the legacy path-style GenerateAssistantResponse on
+    // runtime.*.kiro.dev (IDE 1.0.228+ moved to POST / + x-amz-target). The
+    // path gateway now answers valid modern payloads with 400
+    // REQUEST_BODY_INVALID, and 400 is terminal in BaseExecutor, so kiro.dev
+    // must never be the first surface for any auth method. Amazon surfaces
+    // reject foreign tokens with 401/403, which DO fall through, so trying
+    // q/codewhisperer first is safe for every auth method (CLIRO parity).
 
-    const region = (credentials?.providerSpecificData?.region || "us-east-1").trim();
-    const regionalize = (u) =>
-      region && region !== "us-east-1" && u.includes("amazonaws.com")
-        ? u.replace(/([a-z]+)\.[a-z0-9-]+\.amazonaws\.com/, `$1.${region}.amazonaws.com`)
-        : u;
+    // Only a covered region reaches the hostname that receives the bearer token.
+    const requestedRegion = (credentials?.providerSpecificData?.region || "us-east-1").trim();
+    const regionalize = (u) => {
+      if (!u.includes("amazonaws.com")) return u;
+      const service = u.match(/\/\/([a-z]+)\.[a-z0-9-]+\.amazonaws\.com/)?.[1];
+      const covered = KIRO_SERVICE_REGIONS[service];
+      if (!covered || !covered.has(requestedRegion)) return u;
+      return u.replace(/([a-z]+)\.[a-z0-9-]+\.amazonaws\.com/, `$1.${requestedRegion}.amazonaws.com`);
+    };
 
     const amazon = baseUrls.filter((u) => u.includes("amazonaws.com")).map(regionalize);
     const others = baseUrls.filter((u) => !u.includes("amazonaws.com"));
-    if (authMethod === "api_key") {
-      const q = amazon.filter((u) => u.includes("://q."));
-      const remaining = amazon.filter((u) => !u.includes("://q."));
-      return q.length > 0
-        ? [...q, ...remaining, ...others]
-        : [...amazon, ...others];
-    }
-
-    return amazon.length > 0 ? [...amazon, ...others] : baseUrls;
+    const q = amazon.filter((u) => u.includes("://q."));
+    const remaining = amazon.filter((u) => !u.includes("://q."));
+    return q.length > 0
+      ? [...q, ...remaining, ...others]
+      : [...amazon, ...others];
   }
 
   buildUrl(model, stream, urlIndex = 0, credentials = null) {
     const baseUrls = this.getOrderedBaseUrls(credentials);
-    return baseUrls[urlIndex] || baseUrls[0] || this.config.baseUrl;
+    const url = baseUrls[urlIndex] || baseUrls[0] || this.config.baseUrl;
+    return url;
   }
 
   // Retry only endpoint/auth-surface failures. Payload-invalid HTTP 400 must be
@@ -351,8 +369,16 @@ export class KiroExecutor extends BaseExecutor {
     }
 
     const result = await super.execute(args);
-
-    if (result?.response?.ok) this.attachIntegrityGate(result, args);
+    if (result?.response?.ok) {
+      // KIRO_INTEGRITY_GATE=off streams through, forfeiting the tool-call repair retry.
+      if (process.env.KIRO_INTEGRITY_GATE === "off") {
+        result.response = this.transformEventStreamToSSE(result.response, args.model, {
+          toolSpecs: args.body?.conversationState?.currentMessage?.userInputMessage?.userInputMessageContext?.tools || []
+        });
+      } else {
+        this.attachIntegrityGate(result, args);
+      }
+    }
     return result;
   }
 
@@ -1195,96 +1221,6 @@ export class KiroExecutor extends BaseExecutor {
       log?.error?.("TOKEN", `Kiro refresh error: ${error.message}`);
       return null;
     }
-  }
-}
-
-/**
- * Parse AWS EventStream frame
- */
-
-function parseEventFrame(data) {
-  if (!(data instanceof Uint8Array) || data.byteLength < 16) {
-    throw new Error("AWS EventStream frame is shorter than 16 bytes");
-  }
-  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  const totalLength = view.getUint32(0, false);
-  const headersLength = view.getUint32(4, false);
-  if (totalLength !== data.byteLength) {
-    throw new Error("AWS EventStream frame length does not match its prelude");
-  }
-  if (totalLength > EVENTSTREAM_MAX_MESSAGE_BYTES ||
-      headersLength > EVENTSTREAM_MAX_HEADERS_BYTES ||
-      headersLength > totalLength - 16) {
-    throw new Error("AWS EventStream frame bounds are invalid");
-  }
-  if (view.getUint32(8, false) !== crc32(data.subarray(0, 8))) {
-    throw new Error("AWS EventStream prelude CRC mismatch");
-  }
-  if (view.getUint32(totalLength - 4, false) !== crc32(data.subarray(0, totalLength - 4))) {
-    throw new Error("AWS EventStream message CRC mismatch");
-  }
-
-  const headers = Object.create(null);
-  const names = new Set();
-  let offset = 12;
-  const headerEnd = offset + headersLength;
-  const requireBytes = (count) => {
-    if (offset + count > headerEnd) {
-      throw new Error("AWS EventStream header exceeds its declared bounds");
-    }
-  };
-
-  while (offset < headerEnd) {
-    requireBytes(1);
-    const nameLength = data[offset++];
-    requireBytes(nameLength + 1);
-    const name = decoder.decode(data.subarray(offset, offset + nameLength));
-    offset += nameLength;
-    if (names.has(name)) throw new Error(`AWS EventStream contains duplicate header: ${name}`);
-    names.add(name);
-    const type = data[offset++];
-
-    if (type === 0 || type === 1) {
-      headers[name] = type === 0;
-    } else if (type === 2) {
-      requireBytes(1);
-      headers[name] = view.getInt8(offset);
-      offset += 1;
-    } else if (type === 3) {
-      requireBytes(2);
-      headers[name] = view.getInt16(offset, false);
-      offset += 2;
-    } else if (type === 4) {
-      requireBytes(4);
-      headers[name] = view.getInt32(offset, false);
-      offset += 4;
-    } else if (type === 5 || type === 8) {
-      requireBytes(8);
-      offset += 8;
-    } else if (type === 6 || type === 7) {
-      requireBytes(2);
-      const valueLength = view.getUint16(offset, false);
-      offset += 2;
-      requireBytes(valueLength);
-      const bytes = data.subarray(offset, offset + valueLength);
-      headers[name] = type === 7 ? decoder.decode(bytes) : bytes;
-      offset += valueLength;
-    } else if (type === 9) {
-      requireBytes(16);
-      offset += 16;
-    } else {
-      throw new Error(`AWS EventStream header ${name} has unknown type ${type}`);
-    }
-  }
-
-  const payloadBytes = data.subarray(headerEnd, totalLength - 4);
-  if (payloadBytes.byteLength === 0) return { headers, payload: null };
-  const payloadText = decoder.decode(payloadBytes);
-  if (!payloadText.trim()) return { headers, payload: null };
-  try {
-    return { headers, payload: JSON.parse(payloadText) };
-  } catch (error) {
-    throw new Error(`AWS EventStream payload is not valid JSON (${error.message})`);
   }
 }
 

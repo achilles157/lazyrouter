@@ -105,7 +105,7 @@ export async function POST(request) {
     let updated = 0;
     for (const id of ids) {
       const connection = await getProviderConnectionById(id);
-      if (!connection || connection.provider !== "codebuddy") continue;
+      if (!connection || (connection.provider !== "codebuddy" && connection.provider !== "codebuddy-intl")) continue;
 
       await updateProviderConnection(id, {
         providerSpecificData: {

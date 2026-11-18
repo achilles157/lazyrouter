@@ -1,6 +1,6 @@
-import { randomUUID } from "crypto";
 import { BaseExecutor } from "./base.js";
 import { PROVIDERS } from "../config/providers.js";
+import { buildCommandCodeHeaders } from "../shared/commandCodeHeaders.js";
 import { commandCodeToOpenAIResponse } from "../translator/response/commandcode-to-openai.js";
 import { SSE_DONE } from "../utils/sseConstants.js";
 
@@ -8,7 +8,8 @@ import { SSE_DONE } from "../utils/sseConstants.js";
  * CommandCodeExecutor — talks to https://api.commandcode.ai/alpha/generate
  *
  * Auth: Bearer <user_xxx> API key (stored as the connection's apiKey).
- * Adds the per-request `x-session-id` header expected by CommandCode upstream.
+ * Sends the official CLI's header set (shared/commandCodeHeaders.js); `x-session-id`
+ * matches the body's conversation-stable threadId.
  *
  * Upstream returns AI SDK v5 NDJSON (one JSON event per line, no `data:` prefix).
  * We translate each event to an OpenAI chat.completion.chunk and emit it as SSE so
@@ -21,29 +22,42 @@ export class CommandCodeExecutor extends BaseExecutor {
   }
 
   transformRequest(model, body, stream, credentials) {
-    body.stream = true;
+    if (!body || typeof body !== "object") return body || {};
+    if (body.params) {
+      body.params.stream = true;
+    } else {
+      body.stream = true;
+    }
     return body;
   }
 
-  buildHeaders(credentials, stream = true) {
-    const headers = {
-      "Content-Type": "application/json",
-      ...(this.config.headers || {}),
-      "x-session-id": randomUUID(),
-    };
-
-    const token = credentials?.apiKey || credentials?.accessToken;
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-
-    if (stream) headers["Accept"] = "text/event-stream";
-    return headers;
+  buildHeaders(credentials, stream = true, url, model, transformedBody) {
+    return buildCommandCodeHeaders({
+      apiKey: credentials?.apiKey || credentials?.accessToken,
+      sessionId: transformedBody?.threadId,
+      accept: stream ? "text/event-stream" : null,
+    });
   }
 
   async execute(opts) {
-    const result = await super.execute(opts);
-    if (!result?.response?.ok || !result.response.body) return result;
-    result.response = await inspectAndWrapCommandCodeResponse(result.response, opts.model);
-    return result;
+    const maxRetries = 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const result = await super.execute(opts);
+      if (!result?.response?.ok || !result.response.body) return result;
+
+      const wrappedResponse = await inspectAndWrapCommandCodeResponse(result.response, opts.model);
+      if (!wrappedResponse.ok && attempt < maxRetries) {
+        const isRetryableStatus = wrappedResponse.status === 502 || wrappedResponse.status === 503 || wrappedResponse.status === 504;
+        if (isRetryableStatus) {
+          opts.log?.debug?.("RETRY", `CommandCode upstream returned status ${wrappedResponse.status}, retrying ${attempt + 1}/${maxRetries}...`);
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+      }
+
+      result.response = wrappedResponse;
+      return result;
+    }
   }
 
   parseError(response, bodyText) {
@@ -127,7 +141,7 @@ export async function inspectAndWrapCommandCodeResponse(originalResponse, model)
   const reader = originalResponse.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  const bufferedLines = [];
+  const rawChunks = [];
   let detectedError = null;
 
   try {
@@ -141,16 +155,15 @@ export async function inspectAndWrapCommandCodeResponse(originalResponse, model)
             const parsed = JSON.parse(jsonStr);
             if (parsed?.type === "error") {
               detectedError = parsed;
-            } else {
-              bufferedLines.push(trimmed);
             }
           } catch {
-            bufferedLines.push(trimmed);
+            /* ignore */
           }
         }
         break;
       }
 
+      rawChunks.push(value);
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
@@ -161,7 +174,6 @@ export async function inspectAndWrapCommandCodeResponse(originalResponse, model)
         if (!trimmed) continue;
         const jsonStr = trimmed.startsWith("data:") ? trimmed.slice(5).trim() : trimmed;
         if (!jsonStr || jsonStr === "[DONE]") {
-          bufferedLines.push(trimmed);
           stopLoop = true;
           break;
         }
@@ -170,7 +182,6 @@ export async function inspectAndWrapCommandCodeResponse(originalResponse, model)
         try {
           event = JSON.parse(jsonStr);
         } catch {
-          bufferedLines.push(trimmed);
           continue;
         }
 
@@ -179,8 +190,6 @@ export async function inspectAndWrapCommandCodeResponse(originalResponse, model)
           stopLoop = true;
           break;
         }
-
-        bufferedLines.push(trimmed);
 
         if (
           event?.type === "text-delta" ||
@@ -224,29 +233,18 @@ export async function inspectAndWrapCommandCodeResponse(originalResponse, model)
     );
   }
 
-  const combinedStream = createReplayedStream(bufferedLines, buffer, reader);
+  const combinedStream = createRawReplayedStream(rawChunks, reader);
   return wrapNdjsonAsOpenAISse(combinedStream, model, originalResponse);
 }
 
-function createReplayedStream(bufferedLines, remainingBuffer, reader) {
-  const encoder = new TextEncoder();
-  let replayed = false;
+function createRawReplayedStream(rawChunks, reader) {
+  let chunkIndex = 0;
 
   return new ReadableStream({
     async pull(controller) {
-      if (!replayed) {
-        replayed = true;
-        let prefix = bufferedLines.join("\n");
-        if (prefix && remainingBuffer) {
-          prefix += "\n" + remainingBuffer;
-        } else if (remainingBuffer) {
-          prefix = remainingBuffer;
-        } else if (prefix) {
-          prefix += "\n";
-        }
-        if (prefix) {
-          controller.enqueue(encoder.encode(prefix));
-        }
+      if (chunkIndex < rawChunks.length) {
+        controller.enqueue(rawChunks[chunkIndex++]);
+        return;
       }
 
       try {

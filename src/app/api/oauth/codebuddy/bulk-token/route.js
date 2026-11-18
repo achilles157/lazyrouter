@@ -3,7 +3,7 @@ import { createProviderConnection } from "@/models";
 
 export const dynamic = "force-dynamic";
 
-const CODEBUDDY_PROVIDER_ID = "codebuddy";
+const CODEBUDDY_PROVIDER_ID = "codebuddy-intl";
 const CODEBUDDY_DOMAIN = "www.codebuddy.ai";
 
 async function fetchAccountInfo(accessToken, domain) {

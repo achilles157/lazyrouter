@@ -309,7 +309,7 @@ function CodeBuddyAutomationPanel({ providerInfo, onRefresh }) {
       />
       <BulkAccountAutomationModal
         isOpen={isBulkOpen}
-        provider="codebuddy"
+        provider="codebuddy-intl"
         title="CodeBuddy Bulk GSuite Login + Access Key"
         serviceName="CodeBuddy"
         onSuccess={onRefresh}
@@ -317,7 +317,7 @@ function CodeBuddyAutomationPanel({ providerInfo, onRefresh }) {
       />
       <OAuthModal
         isOpen={isOpen}
-        provider="codebuddy"
+        provider="codebuddy-intl"
         providerInfo={providerInfo}
         onSuccess={() => {
           onRefresh?.();
@@ -695,7 +695,7 @@ const AUTOMATION_PROVIDERS = [
     component: AntigravityAutomationPanel,
   },
   {
-    id: "codebuddy",
+    id: "codebuddy-intl",
     label: "CodeBuddy",
     icon: "smart_toy",
     description: "Bulk GSuite automation and browser OAuth polling login.",

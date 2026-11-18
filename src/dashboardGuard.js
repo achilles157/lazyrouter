@@ -34,7 +34,8 @@ const PUBLIC_API_PATHS = [
 ];
 
 // Public top-level prefixes (LLM API endpoints with their own API key auth).
-const PUBLIC_PREFIXES = ["/v1", "/v1beta", "/api/v1", "/api/v1beta", "/codex"];
+// Keep root-level rewrites here too: middleware runs before Next.js rewrites.
+const PUBLIC_PREFIXES = ["/v1", "/v1beta", "/api/v1", "/api/v1beta", "/codex", "/responses"];
 
 // Always require JWT token regardless of requireLogin setting
 const ALWAYS_PROTECTED = [
@@ -44,6 +45,9 @@ const ALWAYS_PROTECTED = [
   "/api/version/update",
   "/api/oauth/cursor/auto-import",
   "/api/oauth/kiro/auto-import",
+  "/api/oauth/zed/auto-import",
+  "/api/oauth/minimax-code/lease",
+  "/api/oauth/minimax-code-global/lease",
 ];
 
 // Require auth, but allow through if requireLogin is disabled
@@ -80,6 +84,9 @@ const LOCAL_ONLY_PATHS = [
   "/api/tunnel/disable",
   "/api/oauth/cursor/auto-import",
   "/api/oauth/kiro/auto-import",
+  "/api/oauth/zed/auto-import",
+  "/api/oauth/minimax-code/lease",
+  "/api/oauth/minimax-code-global/lease",
   "/api/auth/reset-password",
   "/api/headroom/start",
   "/api/headroom/stop",
@@ -190,6 +197,9 @@ function isPublicApi(pathname) {
   if (isPublicLlmApi(pathname)) return true;
   return PUBLIC_API_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
+
+// Shared with src/proxy.js — the mimo login branch must respect dashboard auth.
+export { isAuthenticated };
 
 export const __test__ = {
   isLocalRequest,

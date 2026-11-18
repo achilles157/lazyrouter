@@ -109,7 +109,9 @@ function syncSchemaFromTables(adapter) {
 
   // Normalize legacy provider name aliases
   try {
-    adapter.exec("UPDATE providerConnections SET provider = 'codebuddy' WHERE provider = 'codebuddy-intl'");
+    // Upstream standardised the international CodeBuddy provider id as
+    // `codebuddy-intl`; the fork used `codebuddy` before the v1.2.0 sync.
+    adapter.exec("UPDATE providerConnections SET provider = 'codebuddy-intl' WHERE provider = 'codebuddy'");
   } catch {}
 }
 

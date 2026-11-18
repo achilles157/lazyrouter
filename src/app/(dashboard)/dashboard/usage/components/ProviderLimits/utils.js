@@ -300,6 +300,12 @@ export function calculatePercentage(used, total) {
  * @returns {number} Remaining percentage (0-100)
  */
 export function getRemainingPercentage(quota) {
+  if (quota?.percentage !== undefined) {
+    // Providers may report the used share; the UI renders the remaining one.
+    const value = quota.percentageIsUsed === true ? 100 - quota.percentage : quota.percentage;
+    return Math.max(0, Math.round(value));
+  }
+
   if (quota?.remaining !== undefined) {
     return Math.max(0, Math.round(quota.remaining));
   }
@@ -316,21 +322,33 @@ export function getQuotaVisibilityKey(quota) {
   return String(quota.modelKey || quota.name || "").trim();
 }
 
-function getProviderHiddenQuotaSet(provider, quotaVisibility) {
+/**
+ * Trim hidden quota keys to only those matching currently valid quotas.
+ * Stale or obsolete model keys are dropped.
+ */
+export function trimHiddenQuotaKeys(hidden = [], quotas = []) {
+  if (!Array.isArray(hidden) || hidden.length === 0) return [];
+  const validKeys = new Set(quotas.map(getQuotaVisibilityKey).filter(Boolean));
+  return [...new Set(hidden.map((k) => String(k).trim()).filter((k) => validKeys.has(k)))];
+}
+
+function getProviderHiddenQuotaSet(provider, quotaVisibility, quotas = []) {
   const hidden = quotaVisibility?.[provider]?.hidden;
-  return new Set(Array.isArray(hidden) ? hidden.map(String) : []);
+  if (!Array.isArray(hidden) || hidden.length === 0) return new Set();
+  const trimmed = quotas.length > 0 ? trimHiddenQuotaKeys(hidden, quotas) : hidden;
+  return new Set(trimmed.map(String));
 }
 
 export function filterQuotasByVisibility(provider, quotas = [], quotaVisibility = {}) {
   if (!Array.isArray(quotas) || quotas.length === 0) return [];
-  const hidden = getProviderHiddenQuotaSet(provider, quotaVisibility);
+  const hidden = getProviderHiddenQuotaSet(provider, quotaVisibility, quotas);
   if (hidden.size === 0) return quotas;
   return quotas.filter((quota) => !hidden.has(getQuotaVisibilityKey(quota)));
 }
 
 export function getHiddenQuotaRows(provider, quotas = [], quotaVisibility = {}) {
   if (!Array.isArray(quotas) || quotas.length === 0) return [];
-  const hidden = getProviderHiddenQuotaSet(provider, quotaVisibility);
+  const hidden = getProviderHiddenQuotaSet(provider, quotaVisibility, quotas);
   if (hidden.size === 0) return [];
   return quotas.filter((quota) => hidden.has(getQuotaVisibilityKey(quota)));
 }
@@ -363,16 +381,192 @@ export function parseQuotaData(provider, data) {
 
       case "antigravity":
         if (data.quotas) {
-          Object.entries(data.quotas).forEach(([modelKey, quota]) => {
+          const entries = Object.entries(data.quotas);
+          const weeklyKeys = new Set(["gemini_weekly", "claude_gpt_weekly", "gemini_argon_weekly"]);
+          const sessionKeys = new Set(["gemini_session", "claude_gpt_session", "gemini_argon_session"]);
+          const summaryKeys = new Set([...weeklyKeys, ...sessionKeys]);
+          const argonModels = entries.filter(([k]) => k.startsWith("gemini-") && k.includes("argon"));
+          const geminiModels = entries.filter(([k]) => k.startsWith("gemini-") && !k.includes("image") && !k.includes("argon"));
+          const claudeModels = entries.filter(([k]) => k.startsWith("claude-"));
+          const imageModels = entries.filter(([k]) => k.includes("image"));
+          const summaryModels = entries.filter(([k]) => summaryKeys.has(k));
+          const otherModels = entries.filter(([k]) => !k.startsWith("gemini-") && !k.startsWith("claude-") && !k.includes("image") && !summaryKeys.has(k));
+
+          // Summary keys from retrieveUserQuotaSummary
+          const hasGeminiWeekly = Boolean(data.quotas.gemini_weekly);
+          const hasGeminiSession = Boolean(data.quotas.gemini_session);
+          const hasArgonWeekly = Boolean(data.quotas.gemini_argon_weekly);
+          const hasArgonSession = Boolean(data.quotas.gemini_argon_session);
+          const hasClaudeWeekly = Boolean(data.quotas.claude_gpt_weekly);
+          const hasClaudeSession = Boolean(data.quotas.claude_gpt_session);
+
+          // 1. Gemini Family (Flash / Pro):
+          if (hasGeminiSession) {
+            summaryModels.filter(([k]) => k === "gemini_session").forEach(([modelKey, quota]) => {
+              normalizedQuotas.push({
+                name: quota.displayName || modelKey,
+                modelKey,
+                used: quota.used || 0,
+                total: quota.total || 0,
+                resetAt: quota.resetAt || null,
+                remainingPercentage: quota.remainingPercentage,
+              });
+            });
+          } else if (geminiModels.length > 0) {
+            const rep = geminiModels.reduce((min, cur) =>
+              (cur[1].remainingPercentage ?? 100) < (min[1].remainingPercentage ?? 100) ? cur : min
+            )[1];
+            // Only show synthesized Gemini row if its resetAt differs from weekly (i.e. it represents a separate 5h window)
+            const weeklyResetAt = data.quotas.gemini_weekly?.resetAt;
+            const isDuplicateOfWeekly = hasGeminiWeekly && rep.resetAt === weeklyResetAt && (rep.remainingPercentage ?? 0) === 0;
+
+            if (!isDuplicateOfWeekly) {
+              normalizedQuotas.push({
+                name: "Gemini (Flash / Pro)",
+                modelKey: "gemini",
+                used: rep.used || 0,
+                total: rep.total || 0,
+                resetAt: rep.resetAt || null,
+                remainingPercentage: rep.remainingPercentage,
+              });
+            }
+          }
+
+          // Show Gemini weekly row if present
+          if (hasGeminiWeekly) {
+            summaryModels.filter(([k]) => k === "gemini_weekly").forEach(([modelKey, quota]) => {
+              normalizedQuotas.push({
+                name: quota.displayName || modelKey,
+                modelKey,
+                used: quota.used || 0,
+                total: quota.total || 0,
+                resetAt: quota.resetAt || null,
+                remainingPercentage: quota.remainingPercentage,
+              });
+            });
+          }
+
+          // 1b. Gemini 4 Argon Family (separate quota bucket on Pro plans):
+          if (hasArgonSession) {
+            summaryModels.filter(([k]) => k === "gemini_argon_session").forEach(([modelKey, quota]) => {
+              normalizedQuotas.push({
+                name: quota.displayName || modelKey,
+                modelKey,
+                used: quota.used || 0,
+                total: quota.total || 0,
+                resetAt: quota.resetAt || null,
+                remainingPercentage: quota.remainingPercentage,
+              });
+            });
+          } else if (!hasArgonWeekly && argonModels.length > 0) {
+            const rep = argonModels.reduce((min, cur) =>
+              (cur[1].remainingPercentage ?? 100) < (min[1].remainingPercentage ?? 100) ? cur : min
+            )[1];
+            const geminiSessionResetAt = data.quotas.gemini_session?.resetAt;
+            const geminiWeeklyResetAt = data.quotas.gemini_weekly?.resetAt;
+            const sharesMainGeminiPool =
+              (hasGeminiSession && rep.resetAt === geminiSessionResetAt && rep.remainingPercentage === data.quotas.gemini_session?.remainingPercentage) ||
+              (hasGeminiWeekly && rep.resetAt === geminiWeeklyResetAt && rep.remainingPercentage === data.quotas.gemini_weekly?.remainingPercentage);
+
+            if (!sharesMainGeminiPool) {
+              normalizedQuotas.push({
+                name: "Gemini 4 Argon",
+                modelKey: "gemini_argon",
+                used: rep.used || 0,
+                total: rep.total || 0,
+                resetAt: rep.resetAt || null,
+                remainingPercentage: rep.remainingPercentage,
+              });
+            }
+          }
+
+          if (hasArgonWeekly) {
+            summaryModels.filter(([k]) => k === "gemini_argon_weekly").forEach(([modelKey, quota]) => {
+              normalizedQuotas.push({
+                name: quota.displayName || modelKey,
+                modelKey,
+                used: quota.used || 0,
+                total: quota.total || 0,
+                resetAt: quota.resetAt || null,
+                remainingPercentage: quota.remainingPercentage,
+              });
+            });
+          }
+
+          // 2. Claude & GPT Family:
+          if (hasClaudeSession) {
+            summaryModels.filter(([k]) => k === "claude_gpt_session").forEach(([modelKey, quota]) => {
+              normalizedQuotas.push({
+                name: quota.displayName || modelKey,
+                modelKey,
+                used: quota.used || 0,
+                total: quota.total || 0,
+                resetAt: quota.resetAt || null,
+                remainingPercentage: quota.remainingPercentage,
+              });
+            });
+          } else if (claudeModels.length > 0) {
+            const rep = claudeModels.reduce((min, cur) =>
+              (cur[1].remainingPercentage ?? 100) < (min[1].remainingPercentage ?? 100) ? cur : min
+            )[1];
+            const weeklyResetAt = data.quotas.claude_gpt_weekly?.resetAt;
+            const isDuplicateOfWeekly = hasClaudeWeekly && rep.resetAt === weeklyResetAt && (rep.remainingPercentage ?? 0) === 0;
+
+            if (!isDuplicateOfWeekly) {
+              normalizedQuotas.push({
+                name: "Claude (Sonnet / Opus)",
+                modelKey: "claude",
+                used: rep.used || 0,
+                total: rep.total || 0,
+                resetAt: rep.resetAt || null,
+                remainingPercentage: rep.remainingPercentage,
+              });
+            }
+          }
+
+          // Show Claude & GPT weekly row if present
+          if (hasClaudeWeekly) {
+            summaryModels.filter(([k]) => k === "claude_gpt_weekly").forEach(([modelKey, quota]) => {
+              normalizedQuotas.push({
+                name: quota.displayName || modelKey,
+                modelKey,
+                used: quota.used || 0,
+                total: quota.total || 0,
+                resetAt: quota.resetAt || null,
+                remainingPercentage: quota.remainingPercentage,
+              });
+            });
+          }
+
+          // 3. Standalone Image Generation Models (unique usage)
+          imageModels.forEach(([modelKey, quota]) => {
             normalizedQuotas.push({
               name: quota.displayName || modelKey,
-              modelKey: modelKey, // Keep modelKey for sorting
+              modelKey,
               used: quota.used || 0,
               total: quota.total || 0,
               resetAt: quota.resetAt || null,
               remainingPercentage: quota.remainingPercentage,
             });
           });
+
+          // 4. Other models:
+          // In Antigravity, GPT-OSS is explicitly documented by Google as part of the "Claude and GPT models" group:
+          // ("Models within this group: Claude Opus, Claude Sonnet, GPT-OSS").
+          // When summary quotas (claude_gpt_session / claude_gpt_weekly) are present, GPT-OSS is already represented
+          // by the "Claude & GPT" family rows. We only include otherModels if no summary exists for that pool.
+          if (!hasClaudeWeekly && !hasClaudeSession) {
+            otherModels.forEach(([modelKey, quota]) => {
+              normalizedQuotas.push({
+                name: quota.displayName || modelKey,
+                modelKey,
+                used: quota.used || 0,
+                total: quota.total || 0,
+                resetAt: quota.resetAt || null,
+                remainingPercentage: quota.remainingPercentage,
+              });
+            });
+          }
         }
         break;
 
@@ -413,25 +607,43 @@ export function parseQuotaData(provider, data) {
         break;
 
       case "qoder":
-        // Qoder ships a `user` quota and (optionally) an `organization`
-        // quota, both with same shape: {total, used, remaining, unit, resetAt}.
-        // Skip an organization bucket when its total is 0 — most personal
-        // Qoder accounts won't have one and rendering "0/0" is misleading.
+      case "qoder-cn":
+        // Qoder ships a `user` quota, an optional `organization` quota and —
+        // when the account has redeemed a free-credit promo — an `addOn`
+        // bucket. All share the shape {total, used, remaining, unit, resetAt}.
+        // Skip any bucket whose total is 0: `personal_standard` accounts
+        // report `user` as 0/0 (their grant lives in `addOn`) and most
+        // accounts never have an organization bucket, so rendering "0/0"
+        // rows is noise. Buckets holding an actual grant always have
+        // total > 0 and are kept.
         // Don't forward Qoder's `remaining` field: it's an absolute credit
         // count, but getRemainingPercentage / QuotaTable interpret
         // `remaining` as a 0-100 percentage and would render 348 credits
         // as "348%". The percentage is computed from used/total instead.
         if (data.quotas) {
           Object.entries(data.quotas).forEach(([quotaType, quota]) => {
-            if (quotaType === "organization" && (!quota || (Number(quota.total) || 0) === 0)) {
+            if (!quota || (Number(quota.total) || 0) === 0) {
               return;
             }
             normalizedQuotas.push({
-              name: quotaType === "user" ? "Personal" : quotaType === "organization" ? "Organization" : quotaType,
+              name:
+                quotaType === "user"
+                  ? "Personal"
+                  : quotaType === "organization"
+                    ? "Organization"
+                    : quotaType === "addOn"
+                      ? "Add-on"
+                      : quotaType,
               used: quota.used || 0,
               total: quota.total || 0,
               unit: quota.unit,
               resetAt: quota.resetAt || null,
+              // Qoder reports open-ended plans as a 9999 sentinel; the service
+              // turns that into neverExpires so the row can read
+              // "Never expires" instead of "N/A" or a year-9999 date.
+              neverExpires: quota.neverExpires === true,
+              // Present on add-on credits: links to Qoder's own usage page.
+              detailUrl: quota.detailUrl || null,
             });
           });
         }
@@ -453,6 +665,8 @@ export function parseQuotaData(provider, data) {
               name,
               used: quota.used || 0,
               total: quota.total || 0,
+              remaining: quota.remaining !== undefined ? quota.remaining : Math.max(0, (quota.total || 100) - (quota.used || 0)),
+              remainingPercentage: quota.remainingPercentage !== undefined ? quota.remainingPercentage : calculatePercentage(quota.used, quota.total),
               resetAt: quota.resetAt || null,
             });
           });
@@ -478,7 +692,8 @@ export function parseQuotaData(provider, data) {
         break;
 
       case "codebuddy-cn":
-        // CodeBuddy CN mixes recurring refill packs ("Monthly"/"Weekly"/...)
+      case "codebuddy-intl":
+        // CodeBuddy CN/Intl mix recurring refill packs ("Monthly"/"Weekly"/...)
         // with one-shot bonus packs ("Bonus Pack N"). Forward `recurring`
         // so the UI can show "Expires in" for bonus packs (whose resetAt is
         // a hard expiry, not a refresh) instead of "Reset in".
@@ -559,14 +774,67 @@ export function parseQuotaData(provider, data) {
               total: quota.total || 0,
               resetAt: quota.resetAt || null,
               remainingPercentage: quota.remainingPercentage,
+              isCreditBalance: quota.isCreditBalance ?? true,
+              currency: quota.currency || (name.includes("(") ? name.slice(name.indexOf("(") + 1, name.indexOf(")")) : "USD"),
+            });
+          });
+        }
+        break;
+
+      case "cursor":
+        // Plan spend is USD (cents from GetCurrentPeriodUsage). Forward
+        // remainingPercentage only — do not pass absolute remaining (UI treats it as %).
+        if (data.quotas) {
+          Object.entries(data.quotas).forEach(([name, quota]) => {
+            normalizedQuotas.push({
+              name,
+              used: quota.used || 0,
+              total: quota.total || 0,
+              resetAt: quota.resetAt || null,
+              remainingPercentage: quota.remainingPercentage,
+            });
+          });
+        }
+        break;
+
+      case "groq":
+        // Requests/Tokens rate-limit windows from response headers — absolute
+        // used/total (calculatePercentage derives the bar), like Codex/Kiro.
+        if (data.quotas) {
+          Object.entries(data.quotas).forEach(([name, quota]) => {
+            normalizedQuotas.push({
+              name,
+              used: quota.used || 0,
+              total: quota.total || 0,
+              resetAt: quota.resetAt || null,
             });
           });
         }
         break;
 
       case "ollama":
-        // Session (5h) / Weekly (7d) usage % from ollama.com/api/usage.
+        // Session (5h) / Weekly (7d) / Monthly usage % from ollama.com/api/balance (or /api/usage).
         // remainingPercentage only — no absolute remaining (UI treats remaining as %).
+        if (data.quotas) {
+          Object.entries(data.quotas).forEach(([name, quota]) => {
+            normalizedQuotas.push({
+              name,
+              used: quota.used || 0,
+              total: quota.total || 0,
+              resetAt: quota.resetAt || null,
+              remainingPercentage: quota.remainingPercentage,
+              isCreditBalance: quota.isCreditBalance,
+              currency: quota.currency,
+              unit: quota.unit,
+              unlimited: quota.unlimited,
+            });
+          });
+        }
+        break;
+
+      case "clinepass":
+        // five_hour / weekly / monthly percentUsed windows from
+        // /api/v1/users/me/plan/usage-limits. remainingPercentage only.
         if (data.quotas) {
           Object.entries(data.quotas).forEach(([name, quota]) => {
             normalizedQuotas.push({
@@ -596,15 +864,41 @@ export function parseQuotaData(provider, data) {
         }
         break;
 
-      default:
-        // Generic fallback for unknown providers
+      case "minimax-code":
+      case "minimax-code-global":
+        // Service already returns dashboard-shaped rows: a credits balance
+        // (isCreditBalance → 💰 with the amount as total) plus M Plan rate
+        // windows as 0-100 percent rows. Pass through, preserving extras.
         if (data.quotas) {
           Object.entries(data.quotas).forEach(([name, quota]) => {
             normalizedQuotas.push({
               name,
               used: quota.used || 0,
               total: quota.total || 0,
+              remaining: quota.remaining,
+              remainingPercentage: quota.remainingPercentage,
               resetAt: quota.resetAt || null,
+              message: quota.message,
+              isCreditBalance: quota.isCreditBalance,
+              currency: quota.currency,
+            });
+          });
+        }
+        break;
+
+      default:
+        // Generic fallback for unknown providers
+        if (data.quotas) {
+          Object.entries(data.quotas).forEach(([name, quota]) => {
+            normalizedQuotas.push({
+              name: quota.name || name,
+              used: quota.used || 0,
+              total: quota.total || 0,
+              percentage: quota.percentage,
+              colorPercentage: quota.colorPercentage,
+              percentageIsUsed: quota.percentageIsUsed === true,
+              resetAt: quota.resetAt || null,
+              emptyMessage: quota.emptyMessage || null,
             });
           });
         }
@@ -614,15 +908,33 @@ export function parseQuotaData(provider, data) {
     return [];
   }
 
+  if (provider?.toLowerCase() === "claude") {
+    const CLAUDE_QUOTA_ORDER = {
+      "session (5h)": 0,
+      "weekly (7d)": 1,
+      "weekly fable (7d)": 2,
+      "weekly opus (7d)": 3,
+      "weekly sonnet (7d)": 4,
+    };
+    normalizedQuotas.sort((a, b) => (CLAUDE_QUOTA_ORDER[a.name] ?? 99) - (CLAUDE_QUOTA_ORDER[b.name] ?? 99));
+    return normalizedQuotas;
+  }
+
   // Sort quotas according to PROVIDER_MODELS order
   const modelOrder = getModelsByProviderId(provider);
   if (modelOrder.length > 0) {
     const orderMap = new Map(modelOrder.map((m, i) => [m.id, i]));
     
     normalizedQuotas.sort((a, b) => {
-      // Use modelKey for antigravity, otherwise use name
-      const keyA = a.modelKey || a.name;
-      const keyB = b.modelKey || b.name;
+      // Use modelKey for antigravity (mapped to family anchor), otherwise use name
+      let keyA = a.modelKey || a.name;
+      let keyB = b.modelKey || b.name;
+      if (keyA === "gemini_argon" || keyA === "gemini_argon_session") keyA = "gemini-4-argon-high";
+      if (keyA === "gemini" || keyA === "gemini_session") keyA = "gemini-3.8-flash-high";
+      if (keyA === "claude" || keyA === "claude_gpt_session") keyA = "claude-sonnet-4-6";
+      if (keyB === "gemini_argon" || keyB === "gemini_argon_session") keyB = "gemini-4-argon-high";
+      if (keyB === "gemini" || keyB === "gemini_session") keyB = "gemini-3.8-flash-high";
+      if (keyB === "claude" || keyB === "claude_gpt_session") keyB = "claude-sonnet-4-6";
       const orderA = orderMap.get(keyA) ?? 999;
       const orderB = orderMap.get(keyB) ?? 999;
       return orderA - orderB;

@@ -4,7 +4,7 @@ const proxyAwareFetch = vi.fn(async (url) => ({
   ok: true,
   status: 200,
   json: async () => url.includes(":loadCodeAssist")
-    ? { cloudaicompanionProject: "project-1", currentTier: { name: "Pro" } }
+    ? { cloudaicompanionProject: "project-1", currentTier: { name: "Pro" }, paidTier: { id: "g1-pro-tier", name: "Google AI Pro" } }
     : {
         models: {
           "gemini-3.6-flash-high": {
@@ -73,7 +73,6 @@ describe("Antigravity quota tracker: Gemini 3.6 Flash usage bars", () => {
       "gemini-3.6-flash-high",
       "gemini-3.6-flash-medium",
       "gemini-3.6-flash-low",
-      "gemini-3.5-flash-low",
     ]);
   });
 });

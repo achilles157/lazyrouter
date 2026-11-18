@@ -24,10 +24,37 @@ export class CodeBuddyIntlExecutor extends DefaultExecutor {
       transformed.reasoning_summary = "auto";
     }
 
+    // Tencent WAF flags third-party CLI agent identity strings (Claude Code, Cursor, etc.)
+    // as unauthorized tooling / prompt injection and rejects/bans the account.
+    // Neutralize only matching agent markers while preserving user system prompts.
+    const NEUTRAL_PROMPT = "You are a helpful AI assistant that helps with software engineering tasks.";
+    const AGENT_PATTERN = /you are claude code|claude.?code.+official.+cli|anthropic.+official.+cli|anxthxropic.+official.+cli|you are (?:cursor|windsurf|cline|aider|continue|copilot|cody)|you are an? (?:ai )?(?:coding |code )?agent|cc_entrypoint\s*=\s*(?:cli|vscode|jetbrains|gui)|claude.?code.+issues|give feedback.+claude.?code|you are .{0,30}(?:powerful )?ai agent|orchestration capabilities|OhMyOpenCode|<agent-identity>|<Role>|<Behavior_Instructions>/i;
+
     // CodeBuddy rejects plain OpenAI shape (11101 invalid request): needs a
     // leading system prompt + user content as typed blocks, not a bare string.
     const source = Array.isArray(transformed.messages) ? transformed.messages : [];
-    transformed.messages = [{ role: "system", content: "You are CodeBuddy Code." }];
+    const clientSystemPrompts = source
+      .filter((m) => m && ["system", "developer"].includes(m.role))
+      .map((m) => {
+        const text =
+          typeof m.content === "string"
+            ? m.content
+            : Array.isArray(m.content)
+              ? m.content.map((c) => c?.text || "").join("\n")
+              : "";
+        if (text && AGENT_PATTERN.test(text)) {
+          return NEUTRAL_PROMPT;
+        }
+        return text;
+      })
+      .filter(Boolean);
+
+    const systemPromptText =
+      clientSystemPrompts.length > 0
+        ? clientSystemPrompts.join("\n\n")
+        : "You are CodeBuddy Code.";
+
+    transformed.messages = [{ role: "system", content: systemPromptText }];
     for (const message of source) {
       if (!message || typeof message !== "object" || ["system", "developer"].includes(message.role)) continue;
       if (message.role === "user" && typeof message.content === "string") {
@@ -38,6 +65,33 @@ export class CodeBuddyIntlExecutor extends DefaultExecutor {
     }
 
     return transformed;
+  }
+  parseError(response, bodyText) {
+    if (bodyText) {
+      try {
+        const data = JSON.parse(bodyText);
+        const msg = data?.msg || data?.message || data?.error?.message || "";
+        if (data?.code === 6004 || /超出频率限制|frequency limit|限额/i.test(msg)) {
+          let resetsAtMs = null;
+          const match = msg.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})(?:\s*UTC\+?([0-9:]+))?/i);
+          if (match) {
+            const dp = match[1];
+            const tp = match[2];
+            const tz = match[3]
+              ? (match[3].includes(":") ? (match[3].startsWith("+") ? match[3] : `+${match[3]}`) : `+${match[3].padStart(2, "0")}:00`)
+              : "+08:00";
+            const dt = new Date(`${dp}T${tp}${tz}`);
+            if (!isNaN(dt.getTime())) resetsAtMs = dt.getTime();
+          }
+          return {
+            status: 429,
+            message: msg || "CodeBuddy frequency limit (6004)",
+            resetsAtMs,
+          };
+        }
+      } catch {}
+    }
+    return super.parseError(response, bodyText);
   }
 }
 

@@ -17,6 +17,8 @@ import {
   refreshTraeToken,
   refreshZedToken,
   refreshWindsurfToken,
+  refreshMiniMaxCodeToken,
+  refreshNousToken,
   classifyOAuthRefreshError,
 } from "./tokenRefresh/providers.js";
 
@@ -37,6 +39,8 @@ export {
   refreshTraeToken,
   refreshZedToken,
   refreshWindsurfToken,
+  refreshMiniMaxCodeToken,
+  refreshNousToken,
   classifyOAuthRefreshError,
 };
 
@@ -149,11 +153,18 @@ const REFRESH_HANDLERS = {
   "codebuddy": (c, log) => refreshCodebuddyIntlToken(c.refreshToken, log),
   trae: (c, log) => refreshTraeToken(c.refreshToken, c, log),
   cline: (c, log) => refreshClineToken(c.refreshToken, log),
+  // ClinePass shares Cline's WorkOS auth endpoints, so the same refresh works.
+  clinepass: (c, log) => refreshClineToken(c.refreshToken, log),
   zed: () => refreshZedToken(),
   windsurf: (c, log) => refreshWindsurfToken(c, log),
   // Kimi Code OAuth (merged into id `kimi`); legacy id still routes here
   kimi: (c, log) => refreshKimiToken(c.refreshToken, c, log),
   "kimi-coding": (c, log) => refreshKimiToken(c.refreshToken, c, log),
+  // MiniMax Code — single-use refresh tokens; the handler dedupes by token
+  // value and classifies invalid_grant (docs/minimax-code-proxy-plan.md §2.3)
+  "minimax-code": (c, log) => refreshMiniMaxCodeToken("minimax-code", c.refreshToken, log),
+  "minimax-code-global": (c, log) => refreshMiniMaxCodeToken("minimax-code-global", c.refreshToken, log),
+  nous: (c, log) => refreshNousToken(c.refreshToken, log),
   vertex: vertexRefreshHandler,
   "vertex-partner": vertexRefreshHandler
 };

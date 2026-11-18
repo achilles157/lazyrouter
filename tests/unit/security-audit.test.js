@@ -1,12 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath } from "url";
 
-// Audit ini membaca berkas sumber repo. Resolusinya harus dari letak berkas test,
-// bukan process.cwd() — suite dijalankan dari folder tests/, sehingga path relatif
-// seperti "src/..." akan menunjuk ke tests/src/... dan berakhir ENOENT.
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+// Source paths are repo-relative; vitest runs from tests/, so resolve from the repo root.
+const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 // ============================================================
 // AUDIT-002 (#1962): API key masking in usage stats

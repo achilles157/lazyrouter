@@ -8,12 +8,12 @@ import { cn } from "@/shared/utils/cn";
 import { APP_CONFIG, UPDATER_CONFIG } from "@/shared/constants/config";
 import { MEDIA_PROVIDER_KINDS } from "@/shared/constants/providers";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
+import useSettingsStore from "@/store/settingsStore";
 import Button from "./Button";
 import { ConfirmModal } from "./Modal";
-import NineRemotePromoModal from "./NineRemotePromoModal";
 
 // const VISIBLE_MEDIA_KINDS = ["embedding", "image", "imageToText", "tts", "stt", "webSearch", "webFetch", "video", "music"];
-const VISIBLE_MEDIA_KINDS = ["embedding", "image", "video", "tts", "stt"];
+const VISIBLE_MEDIA_KINDS = ["embedding", "image", "video", "tts", "stt", "systemone"];
 // Combined entry: webSearch + webFetch share one page at /dashboard/media-providers/web
 const COMBINED_WEB_ITEM = { id: "web", label: "Web Fetch & Search", icon: "travel_explore", href: "/dashboard/media-providers/web" };
 
@@ -43,7 +43,6 @@ const systemItems = [
 export default function Sidebar({ onClose }) {
   const pathname = usePathname();
   const [mediaOpen, setMediaOpen] = useState(false);
-  const [showRemoteModal, setShowRemoteModal] = useState(false);
   const [isDisconnected, setIsDisconnected] = useState(false);
   const [updateInfo, setUpdateInfo] = useState(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -55,18 +54,20 @@ export default function Sidebar({ onClose }) {
   const INSTALL_CMD = UPDATER_CONFIG.installCmdLatest;
 
   useEffect(() => {
-    fetch("/api/settings")
-      .then(res => res.json())
-      .then(data => { if (data.enableTranslator) setEnableTranslator(true); })
-      .catch(() => {});
+    useSettingsStore.getState().fetchSettings().then((data) => {
+      if (data?.enableTranslator) setEnableTranslator(true);
+    });
   }, []);
 
-  // Lazy check for new npm version on mount
+  // Lazy check for new npm version in background after initial render
   useEffect(() => {
-    fetch("/api/version")
-      .then(res => res.json())
-      .then(data => { if (data.hasUpdate) setUpdateInfo(data); })
-      .catch(() => {});
+    const timer = setTimeout(() => {
+      fetch("/api/version")
+        .then(res => res.json())
+        .then(data => { if (data.hasUpdate) setUpdateInfo(data); })
+        .catch(() => {});
+    }, 2500);
+    return () => clearTimeout(timer);
   }, []);
 
   const isActive = (href) => {
@@ -293,8 +294,11 @@ export default function Sidebar({ onClose }) {
             })}
 
             {/* Remote */}
-            <button
-              onClick={() => setShowRemoteModal(true)}
+            <a
+              href="https://9remote.cc"
+              target="_blank"
+              rel="noreferrer"
+              onClick={onClose}
               className={cn(
                 "flex items-center gap-3 px-3 py-1 rounded-lg transition-all group w-full",
                 "text-text-muted hover:bg-surface-2 hover:text-text-main"
@@ -304,7 +308,10 @@ export default function Sidebar({ onClose }) {
                 computer
               </span>
               <span className="text-[13px] font-medium">9Remote</span>
-            </button>
+              <span className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-[3px] bg-orange-500/15 text-orange-400">
+                HOT
+              </span>
+            </a>
 
             {/* 9English */}
             <a
@@ -349,8 +356,6 @@ export default function Sidebar({ onClose }) {
 
       </aside>
 
-      {/* Remote Promo Modal */}
-      <NineRemotePromoModal isOpen={showRemoteModal} onClose={() => setShowRemoteModal(false)} />
 
       {/* Update Confirmation Modal */}
       <ConfirmModal

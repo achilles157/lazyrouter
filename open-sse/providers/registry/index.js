@@ -69,6 +69,7 @@ import p66 from "./ollama.js";
 import p123 from "./ollama-search.js";
 import p67 from "./openai.js";
 import p68 from "./opencode-go.js";
+import p68z from "./opencode-zen.js";
 import p69 from "./opencode.js";
 import p70 from "./openrouter.js";
 import p71 from "./perplexity-web.js";
@@ -76,6 +77,7 @@ import p72 from "./perplexity.js";
 import p73 from "./perplexity-agent.js";
 import p74 from "./playht.js";
 import p75 from "./qoder.js";
+import p124 from "./qoder-cn.js";
 import p77 from "./recraft.js";
 import p78 from "./runwayml.js";
 import p79 from "./sdwebui.js";
@@ -83,6 +85,7 @@ import p80 from "./searchapi.js";
 import p81 from "./searxng.js";
 import p82 from "./serper.js";
 import p83 from "./siliconflow.js";
+import p139 from "./sensenova.js";
 import p84 from "./stability-ai.js";
 import p85 from "./tavily.js";
 import p86 from "./together.js";
@@ -99,7 +102,7 @@ import p96 from "./xiaomi-mimo.js";
 import p97 from "./xiaomi-tokenplan.js";
 import p98 from "./youcom.js";
 import p99 from "./alims-intl.js";
-import p101 from "./codebuddy.js";
+import p100 from "./codebuddy-intl.js";
 // Temporarily hidden — no tool calling support (trae SOLO agent / windsurf gRPC skip ToolCallChunk).
 // Re-enable by uncommenting both the import and the array entry below.
 // import p102 from "./trae.js";
@@ -123,37 +126,57 @@ import p119 from "./selfhosted-embedding.js";
 import p120 from "./fish-audio.js";
 import p121 from "./alitp-intl.js";
 import p122 from "./xquik.js";
-import p124 from "./freebuff.js";
-import p125 from "./autoclaw.js";
-// Free API-key providers ported from VansRouter (free tier, no custom executor)
-import p126 from "./ai21.js";
-import p127 from "./baseten.js";
-import p128 from "./bytez.js";
-import p129 from "./deepinfra.js";
-import p130 from "./friendliai.js";
-import p131 from "./nscale.js";
-// Registry-only API-key providers ported from VansRouter (batch 2)
-import p132 from "./a6api.js";
-import p133 from "./alibaba.js";
-import p134 from "./codestral.js";
-import p135 from "./databricks.js";
-import p136 from "./galadriel.js";
-import p137 from "./gigachat.js";
-import p138 from "./heroku.js";
-import p139 from "./llamagate.js";
-import p140 from "./nanogpt.js";
-import p141 from "./ovhcloud.js";
-import p142 from "./predibase.js";
-import p143 from "./publicai.js";
-import p144 from "./snowflake.js";
-import p145 from "./upstage.js";
-import p146 from "./volcengine.js";
-import p147 from "./wandb.js";
-import p148 from "./zenmux.js";
-import p149 from "./agentrouter.js";
-import p150 from "./zcode.js";
-import p151 from "./qwen.js";
-
+import p125 from "./tokenharbor.js";
+import p126 from "./dahl.js";
+import p127 from "./atria.js";
+import p129 from "./agnes.js";
+import p130 from "./bai.js";
+import p131 from "./tinyfish.js";
+import p132 from "./v1m.js";
+import p133 from "./muse.js";
+import p134 from "./minimax-code.js";
+import p135 from "./minimax-code-global.js";
+import p136 from "./bedrock.js";
+import p137 from "./bedrock-xai.js";
+import p138 from "./nous.js";
+import p140 from "./deepseek-web.js";
+import p143 from "./gemini-web.js";
+import p144 from "./muse-web.js";
+import p146 from "./chatgpt-web.js";
+import p147 from "./veoaifree-web.js";
+import p151 from "./uc-web.js";
+import p152 from "./runcrate.js";
+import p153 from "./nace.js";
+import p154 from "./sensenova-intl.js";
+import p155 from "./synthetic.js";
+import p156 from "./a6api.js";
+import p157 from "./agentrouter.js";
+import p158 from "./ai21.js";
+import p159 from "./alibaba.js";
+import p160 from "./autoclaw.js";
+import p161 from "./baseten.js";
+import p162 from "./bytez.js";
+import p163 from "./codestral.js";
+import p164 from "./databricks.js";
+import p165 from "./deepinfra.js";
+import p166 from "./freebuff.js";
+import p167 from "./friendliai.js";
+import p168 from "./galadriel.js";
+import p169 from "./gigachat.js";
+import p170 from "./heroku.js";
+import p171 from "./llamagate.js";
+import p172 from "./nanogpt.js";
+import p173 from "./nscale.js";
+import p174 from "./ovhcloud.js";
+import p175 from "./predibase.js";
+import p176 from "./publicai.js";
+import p177 from "./qwen.js";
+import p178 from "./snowflake.js";
+import p179 from "./upstage.js";
+import p180 from "./volcengine.js";
+import p181 from "./wandb.js";
+import p182 from "./zcode.js";
+import p183 from "./zenmux.js";
 export default [
   p0,
   p1,
@@ -222,8 +245,11 @@ export default [
   p64,
   p65,
   p66,
+  p123,
+  p124,
   p67,
   p68,
+  p68z,
   p69,
   p70,
   p71,
@@ -238,6 +264,7 @@ export default [
   p81,
   p82,
   p83,
+  p139,
   p84,
   p85,
   p86,
@@ -254,7 +281,7 @@ export default [
   p97,
   p98,
   p99,
-  p101,
+  p100,
   // p102, // trae — hidden, no tool calling
   p103,
   p105,
@@ -276,12 +303,9 @@ export default [
   p120,
   p121,
   p122,
-  p123,
-  p124,
   p125,
   p126,
   p127,
-  p128,
   p129,
   p130,
   p131,
@@ -292,17 +316,42 @@ export default [
   p136,
   p137,
   p138,
-  p139,
   p140,
-  p141,
-  p142,
   p143,
   p144,
-  p145,
   p146,
   p147,
-  p148,
-  p149,
-  p150,
   p151,
+  p152,
+  p153,
+  p154,
+  p155,
+  p156,
+  p157,
+  p158,
+  p159,
+  p160,
+  p161,
+  p162,
+  p163,
+  p164,
+  p165,
+  p166,
+  p167,
+  p168,
+  p169,
+  p170,
+  p171,
+  p172,
+  p173,
+  p174,
+  p175,
+  p176,
+  p177,
+  p178,
+  p179,
+  p180,
+  p181,
+  p182,
+  p183,
 ];

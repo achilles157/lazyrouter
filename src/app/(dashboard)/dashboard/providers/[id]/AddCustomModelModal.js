@@ -2,17 +2,24 @@
 
 import { useState, useEffect } from "react";
 import PropTypes from "prop-types";
-import { Button, Modal } from "@/shared/components";
+import { Button, Modal, Select, Toggle } from "@/shared/components";
+import { CAPACITY_META, STT_TRANSPORT_META, STT_TRANSPORTS } from "@/shared/constants/models";
+
+const defaultCaps = () => Object.fromEntries(Object.keys(CAPACITY_META).map((key) => [key, false]));
 
 export default function AddCustomModelModal({ isOpen, providerAlias, providerDisplayAlias, onSave, onClose }) {
   const [modelId, setModelId] = useState("");
+  const [caps, setCaps] = useState(defaultCaps);
+  const [modelType, setModelType] = useState("llm");
   const [testStatus, setTestStatus] = useState(null); // null | "testing" | "ok" | "error"
   const [testError, setTestError] = useState("");
   const [saving, setSaving] = useState(false);
+  // Realtime dispatch marker for the transport select; "" = provider default REST.
+  const [transport, setTransport] = useState("");
 
   // Reset state when modal opens
   useEffect(() => {
-    if (isOpen) { setModelId(""); setTestStatus(null); setTestError(""); }
+    if (isOpen) { setModelId(""); setCaps(defaultCaps()); setModelType("llm"); setTransport(""); setTestStatus(null); setTestError(""); }
   }, [isOpen]);
 
   // Strip provider's own alias prefix (e.g. "cc/model" -> "model" for cc provider)
@@ -30,7 +37,7 @@ export default function AddCustomModelModal({ isOpen, providerAlias, providerDis
       const res = await fetch("/api/models/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: `${providerAlias}/${cleanId}` }),
+        body: JSON.stringify({ model: `${providerAlias}/${cleanId}`, kind: modelType }),
       });
       const data = await res.json();
       setTestStatus(data.ok ? "ok" : "error");
@@ -46,7 +53,7 @@ export default function AddCustomModelModal({ isOpen, providerAlias, providerDis
     if (!cleanId || saving) return;
     setSaving(true);
     try {
-      await onSave(cleanId);
+      await onSave(cleanId, modelType, modelType === "llm" ? caps : undefined, modelType === "stt" ? transport : null);
     } finally {
       setSaving(false);
     }
@@ -59,6 +66,25 @@ export default function AddCustomModelModal({ isOpen, providerAlias, providerDis
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Add Custom Model">
       <div className="flex flex-col gap-4">
+        <Select
+          label="Model type"
+          value={modelType}
+          options={[
+            { value: "llm", label: "Chat / LLM" },
+            { value: "stt", label: "Speech to text (STT)" },
+          ]}
+          onChange={(e) => {
+            setModelType(e.target.value);
+            setCaps(defaultCaps());
+            setTransport("");
+            setTestStatus(null);
+            setTestError("");
+          }}
+          disabled={saving || testStatus === "testing"}
+          hint={modelType === "llm"
+            ? "Chat models appear in this provider's Available Models."
+            : "Audio transcription models use /v1/audio/transcriptions."}
+        />
         <div>
           <label className="text-sm font-medium mb-1.5 block">Model ID</label>
           <div className="flex gap-2">
@@ -85,6 +111,35 @@ export default function AddCustomModelModal({ isOpen, providerAlias, providerDis
             Sent to provider as: <code className="font-mono bg-sidebar px-1 rounded">{stripAlias(modelId.trim()) || "model-id"}</code>
           </p>
         </div>
+
+        {modelType === "llm" && (
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Capabilities</label>
+            <div className="flex flex-wrap gap-4">
+              {Object.entries(CAPACITY_META).map(([key, meta]) => (
+                <Toggle
+                  key={key}
+                  checked={!!caps[key]}
+                  onChange={(v) => setCaps((prev) => ({ ...prev, [key]: v }))}
+                  label={meta.label}
+                  description={meta.desc}
+                  size="sm"
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {modelType === "stt" && (
+          <Select
+            label="Transport"
+            value={transport}
+            onChange={(e) => setTransport(e.target.value)}
+            placeholder="Provider default (REST)"
+            options={STT_TRANSPORTS.map((t) => ({ value: t, label: STT_TRANSPORT_META[t].label }))}
+            hint="Realtime transport marker for the STT dispatcher. Empty keeps the provider's REST format."
+          />
+        )}
 
         {/* Test result */}
         {testStatus === "ok" && (

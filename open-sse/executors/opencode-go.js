@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
 import { DefaultExecutor } from "./default.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
-import { modelTargetFormat } from "../providers/models/schema.js";
-import { getProviderModels } from "../config/providerModels.js";
+import { getModelTargetFormat } from "../config/providerModels.js";
+import { FORMATS } from "../translator/formats.js";
 import {
   normalizeResponsesInput,
   clampResponsesCallId,
@@ -14,7 +14,7 @@ const SESSION_HEADER = "x-opencode-session";
 const SESSION_FIELD = "_opencodeGoSession";
 const MAX_SESSION_LENGTH = 256;
 
-const RESPONSES_BASE_URL = "https://opencode.ai/zen/go/v1/responses";
+const RESPONSES_BASE_URL = "https://opencode.ai/inference/go/openai/v1/responses";
 const MAX_TOOL_NAME_LEN = 128;
 
 function normalizeSession(value) {
@@ -41,16 +41,10 @@ function translatedSession(sessionId, clientTool) {
   return `ses_${digest}`;
 }
 
-// Strip the thinking suffix "model(level)" so checks hit the base id.
-function baseModelId(model) {
-  return String(model || "").replace(/\([^()]+\)\s*$/, "").trim();
-}
-
-// Responses-only per the provider registry (grok-4.6, gpt-5.6-luna, muse-spark, …).
-// Reading the registry keeps this in sync with config — never hardcode model ids here.
+// Responses-only per the provider registry (grok-4.6, gpt-5.6-luna, muse-spark, …),
+// including the family-regex fallback for passthrough ids — never hardcode model ids here.
 function isResponsesModel(model) {
-  const entry = getProviderModels("opencode-go").find((m) => m.id === baseModelId(model));
-  return modelTargetFormat(entry) === "openai-responses";
+  return getModelTargetFormat("opencode-go", model) === FORMATS.OPENAI_RESPONSES;
 }
 
 // Flatten Chat Completions tool declarations into the Responses flat shape and
