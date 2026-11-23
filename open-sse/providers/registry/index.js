@@ -149,34 +149,37 @@ import p152 from "./runcrate.js";
 import p153 from "./nace.js";
 import p154 from "./sensenova-intl.js";
 import p155 from "./synthetic.js";
-import p156 from "./a6api.js";
-import p157 from "./agentrouter.js";
-import p158 from "./ai21.js";
-import p159 from "./alibaba.js";
-import p160 from "./autoclaw.js";
-import p161 from "./baseten.js";
-import p162 from "./bytez.js";
-import p163 from "./codestral.js";
-import p164 from "./databricks.js";
-import p165 from "./deepinfra.js";
-import p166 from "./freebuff.js";
-import p167 from "./friendliai.js";
-import p168 from "./galadriel.js";
-import p169 from "./gigachat.js";
-import p170 from "./heroku.js";
-import p171 from "./llamagate.js";
-import p172 from "./nanogpt.js";
-import p173 from "./nscale.js";
-import p174 from "./ovhcloud.js";
-import p175 from "./predibase.js";
-import p176 from "./publicai.js";
-import p177 from "./qwen.js";
-import p178 from "./snowflake.js";
-import p179 from "./upstage.js";
-import p180 from "./volcengine.js";
-import p181 from "./wandb.js";
-import p182 from "./zcode.js";
-import p183 from "./zenmux.js";
+import p156 from "./opendesign-go.js";
+import p157 from "./deeprelay.js";
+import p158 from "./qwencloud.js";
+import p159 from "./a6api.js";
+import p160 from "./agentrouter.js";
+import p161 from "./ai21.js";
+import p162 from "./alibaba.js";
+import p163 from "./autoclaw.js";
+import p164 from "./baseten.js";
+import p165 from "./bytez.js";
+import p166 from "./codestral.js";
+import p167 from "./databricks.js";
+import p168 from "./deepinfra.js";
+import p169 from "./freebuff.js";
+import p170 from "./friendliai.js";
+import p171 from "./galadriel.js";
+import p172 from "./gigachat.js";
+import p173 from "./heroku.js";
+import p174 from "./llamagate.js";
+import p175 from "./nanogpt.js";
+import p176 from "./nscale.js";
+import p177 from "./ovhcloud.js";
+import p178 from "./predibase.js";
+import p179 from "./publicai.js";
+import p180 from "./qwen.js";
+import p181 from "./snowflake.js";
+import p182 from "./upstage.js";
+import p183 from "./volcengine.js";
+import p184 from "./wandb.js";
+import p185 from "./zcode.js";
+import p186 from "./zenmux.js";
 export default [
   p0,
   p1,
@@ -354,4 +357,7 @@ export default [
   p181,
   p182,
   p183,
+  p184,
+  p185,
+  p186,
 ];

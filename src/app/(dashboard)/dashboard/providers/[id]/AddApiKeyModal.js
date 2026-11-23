@@ -155,7 +155,6 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
       // Non-ollama providers require a name
       if (!formData.name) return;
     }
-    if (isCompatible && !formData.defaultModel.trim()) return;
 
     setSaving(true);
     try {
@@ -372,10 +371,11 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
         )}
         {isCompatible && (
           <Input
-            label="Default Model"
+            label="Default Model (Optional)"
             value={formData.defaultModel}
             onChange={(e) => setFormData({ ...formData, defaultModel: e.target.value })}
             placeholder={isAnthropic ? "claude-3-5-sonnet-latest" : "gpt-4o-mini"}
+            hint="Optional. Enter the model ID if your endpoint expects a specific model for validation."
           />
         )}
         {isOllamaLocal && (
@@ -514,7 +514,7 @@ export default function AddApiKeyModal({ isOpen, provider, providerName, isCompa
         </p>
 
         <div className="flex gap-2">
-          <Button onClick={handleSubmit} fullWidth disabled={saving || (!isOllamaLocal && (!formData.name || !apiKeySatisfied())) || (isCompatible && !formData.defaultModel.trim()) || (isAzure && (!azureData.azureEndpoint || !azureData.deployment || !azureData.organization)) || (isCloudflareAi && !cloudflareData.accountId)}>
+          <Button onClick={handleSubmit} fullWidth disabled={saving || (!isOllamaLocal && (!formData.name || !apiKeySatisfied())) || (isAzure && (!azureData.azureEndpoint || !azureData.deployment || !azureData.organization)) || (isCloudflareAi && !cloudflareData.accountId)}>
             {saving ? "Saving..." : "Save"}
           </Button>
           <Button onClick={onClose} variant="ghost" fullWidth>
