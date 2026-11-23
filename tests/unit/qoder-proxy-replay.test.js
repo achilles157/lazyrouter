@@ -82,7 +82,9 @@ describe("Qoder signed inference transport", () => {
     expect(result.response.ok).toBe(true);
     await result.response.text();
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(!!fetchMock.mock.calls[0][1].dispatcher).toBe(useProxy);
+    // proxyAwareFetch now always installs a dispatcher (a direct one when no
+    // proxy is configured), so only the proxied case is meaningful here.
+    if (useProxy) expect(fetchMock.mock.calls[0][1].dispatcher).toBeDefined();
   });
 
   it("preserves caller cancellation without replaying the request", async () => {

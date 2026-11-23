@@ -35,6 +35,8 @@ function sanitize(headers) {
       ? v.replace(/Bearer .+/, "Bearer <TOK>")
           .replace(/sk-test-APIKEY|tok-test-ACCESS/g, "<CRED>")
           .replace(/kimi-\d{10,}/g, "kimi-<TS>")
+          // CodeBuddy mints request/conversation UUIDs per call
+          .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<UUID>")
           // Volatile build/runtime metadata: this golden exists to catch header
           // and URL drift, so app/node versions and host details must not break it
           // on every bump.

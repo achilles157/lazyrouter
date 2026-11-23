@@ -41,10 +41,12 @@ export function isStaleSocketError(error) {
 let undiciFetch = null;
 async function rawFetch(url, options) {
   // Under vitest, honor a stubbed global fetch so transport tests can observe
-  // the dispatcher/headers instead of reaching the network. Production always
-  // uses undici, whose `dispatcher` option native fetch does not support.
-  if (process.env.VITEST && typeof globalThis.fetch === "function") {
-    return globalThis.fetch(url, options);
+  // the dispatcher/headers instead of reaching the network. Only vi mock
+  // functions qualify — real global fetch keeps going through undici so the
+  // keep-alive/fresh-socket paths stay exercisable.
+  const globalFetch = globalThis.fetch;
+  if (process.env.VITEST && globalFetch && (globalFetch._isMockFunction || globalFetch.mock)) {
+    return globalFetch(url, options);
   }
   undiciFetch ??= (await import("undici")).fetch;
   return undiciFetch(url, options);
