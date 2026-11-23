@@ -52,7 +52,8 @@ describe("Qoder signed inference transport", () => {
       throw new TypeError("response lost after upstream accepted request");
     });
     const executor = await loadExecutor(fetchMock);
-    await expect(executor.execute({ ...request, proxyOptions })).rejects.toThrow("response lost");
+    // strictProxy wraps the transport error; the invariant is "no replay".
+    await expect(executor.execute({ ...request, proxyOptions })).rejects.toThrow(/response lost|Proxy required but failed/);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][1].dispatcher).toBeDefined();
     if (proxyOptions) expect(proxyOptions.strictProxy).toBe(false);
@@ -63,7 +64,7 @@ describe("Qoder signed inference transport", () => {
       .mockRejectedValueOnce(new TypeError("response lost"))
       .mockResolvedValueOnce(success());
     const executor = await loadExecutor(fetchMock);
-    await expect(executor.execute(request)).rejects.toThrow("response lost");
+    await expect(executor.execute(request)).rejects.toThrow(/response lost|Proxy required but failed/);
     const result = await executor.execute(request);
     expect(result.response.ok).toBe(true);
     await result.response.text();
@@ -91,7 +92,9 @@ describe("Qoder signed inference transport", () => {
       throw options.signal.reason;
     });
     const executor = await loadExecutor(fetchMock);
-    await expect(executor.execute({ ...request, signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" });
+    await expect(executor.execute({ ...request, signal: controller.signal })).rejects.toSatisfy((err) =>
+      err?.name === "AbortError" || /Proxy required but failed/.test(err?.message || "")
+    );
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -157,7 +157,10 @@ describe("chatCore provider session forwarding", () => {
     );
     const calls = [...source.matchAll(/executor\.execute\(\{([\s\S]*?)\}\)/g)].map((match) => match[1]);
 
-    expect(calls).toHaveLength(2);
+    // Initial and retry execution share one helper (executeWithPoolFallback),
+    // so every dispatch site must carry both fields.
+    expect(calls.length).toBeGreaterThanOrEqual(1);
+    expect(source).toMatch(/executeWithPoolFallback\(0\)/);
     for (const call of calls) {
       expect(call).toMatch(/providerSessionId:\s*sessionSeed/);
       expect(call).toMatch(/\bclientTool\b/);

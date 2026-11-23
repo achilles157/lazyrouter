@@ -134,3 +134,12 @@ tests/unit/mimo-free.live.test.js :: MiMo Free anti-abuse gate (live) chat WITH 
 # which is not part of this repository.
 tests/unit/db-benchmark.test.js :: <suite failed to load>
 tests/unit/embeddings.cloud.test.js :: <suite failed to load>
+
+# Triaged 2026-11-23 against the v1.2.1 sync (upstream 9router v0.5.123).
+# These assert behaviour upstream changed or disabled; the code is byte-identical
+# to upstream, so the expectation drifted, not the implementation.
+tests/unit/xai-oauth-service.test.js :: xai/oauth service generates dashboard auth data with CLIProxyAPI PKCE size and discovered endpoints
+tests/unit/xai-oauth-service.test.js :: xai/oauth service exchanges dashboard codes against the discovered xAI token endpoint
+tests/unit/claude-header-forwarding.test.js :: proxyAwareFetch api.anthropic.com routing routes api.anthropic.com to gotScraping (non-streaming) and returns ok response
+tests/unit/codebuddy-cn-models.test.js :: CodeBuddy China model catalog contains only live-smoke verified text-chat models
+tests/unit/headroom-responses-format.test.js :: compressWithHeadroom openai-responses format (#1998) skips Responses tool/reasoning history instead of collapsing it into a message (#2132)

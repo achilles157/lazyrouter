@@ -34,9 +34,9 @@ describe("glm registry entry (dual-auth)", () => {
   it("keeps the direct api.z.ai anthropic transport (no separate gateway)", () => {
     expect(TRANSPORTS.glm.baseUrl).toBe(ANTHROPIC_URL);
     expect(TRANSPORTS.glm.auth.header).toBe("x-api-key");
-    // no zcode gateway/hook leftovers
-    expect(TRANSPORTS.zcode).toBeUndefined();
-    expect(PROVIDER_OAUTH.zcode).toBeUndefined();
+    // the fork ships Zcode as its own provider, not as a glm hook
+    expect(TRANSPORTS.zcode?.baseUrl).toBeTruthy();
+    expect(PROVIDER_OAUTH.zcode).toBeDefined();
   });
 
   it("declares the ZCode CLI polling OAuth endpoints (no refresh grant)", () => {

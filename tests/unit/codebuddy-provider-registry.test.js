@@ -9,28 +9,28 @@ import {
 
 describe("CodeBuddy provider registry split", () => {
   it("exposes CodeBuddy and CodeBuddy CN as separate OAuth providers", () => {
-    expect(OAUTH_PROVIDERS.codebuddy?.name).toMatch(/^CodeBuddy/);
+    expect(OAUTH_PROVIDERS["codebuddy-intl"]?.name).toMatch(/^CodeBuddy/);
     expect(OAUTH_PROVIDERS["codebuddy-cn"]?.name).toBe("CodeBuddy CN");
-    expect(OAUTH_PROVIDERS.codebuddy?.authModes).toEqual(["oauth", "apikey"]);
+    expect(OAUTH_PROVIDERS["codebuddy-intl"]?.authModes).toEqual(["oauth", "apikey"]);
     expect(OAUTH_PROVIDERS["codebuddy-cn"]?.authModes).toEqual(["oauth", "apikey"]);
   });
 
   it("keeps separate model aliases and default catalogs", () => {
-    expect(PROVIDER_ID_TO_ALIAS.codebuddy).toBe("cb");
+    expect(PROVIDER_ID_TO_ALIAS["codebuddy-intl"]).toBe("cbai");
     expect(PROVIDER_ID_TO_ALIAS["codebuddy-cn"]).toBe("cbcn");
-    expect(parseModel("cb/default-model")).toMatchObject({
-      provider: "codebuddy",
+    expect(parseModel("cbai/default-model")).toMatchObject({
+      provider: "codebuddy-intl",
       model: "default-model",
     });
     expect(parseModel("cbcn/glm-5.1")).toMatchObject({
       provider: "codebuddy-cn",
       model: "glm-5.1",
     });
-    expect(getModelsByProviderId("codebuddy").map((model) => model.id)).toContain("default-model");
+    expect(getModelsByProviderId("codebuddy-intl").map((model) => model.id)).toContain("glm-5.2");
   });
 
   it("allows quota tracking for OAuth and generated API-key connections", () => {
-    expect(USAGE_SUPPORTED_PROVIDERS).toEqual(expect.arrayContaining(["codebuddy", "codebuddy-cn"]));
-    expect(USAGE_APIKEY_PROVIDERS).toEqual(expect.arrayContaining(["codebuddy", "codebuddy-cn"]));
+    expect(USAGE_SUPPORTED_PROVIDERS).toEqual(expect.arrayContaining(["codebuddy-intl", "codebuddy-cn"]));
+    expect(USAGE_APIKEY_PROVIDERS).toEqual(expect.arrayContaining(["codebuddy-intl", "codebuddy-cn"]));
   });
 });

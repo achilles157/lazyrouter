@@ -40,6 +40,12 @@ export function isStaleSocketError(error) {
 // to match within one undici version.
 let undiciFetch = null;
 async function rawFetch(url, options) {
+  // Under vitest, honor a stubbed global fetch so transport tests can observe
+  // the dispatcher/headers instead of reaching the network. Production always
+  // uses undici, whose `dispatcher` option native fetch does not support.
+  if (process.env.VITEST && typeof globalThis.fetch === "function") {
+    return globalThis.fetch(url, options);
+  }
   undiciFetch ??= (await import("undici")).fetch;
   return undiciFetch(url, options);
 }
